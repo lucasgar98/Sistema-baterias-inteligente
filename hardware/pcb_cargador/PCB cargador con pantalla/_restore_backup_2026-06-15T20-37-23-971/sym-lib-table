@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "PCB cargador con pantalla-cache") (type "Legacy") (uri "D:/Ingenieria/Plan 2023/3 año/Digitales IV/Proyecto bateria/PCB cargador con pantalla/PCB cargador con pantalla-cache.lib") (options "") (descr "Biblioteca de caché de proyecto heredado"))
+)

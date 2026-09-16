@@ -1,0 +1,13 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema para pyzbar
+RUN apt-get update && apt-get install -y \
+    libzbar0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalamos las librerías necesarias
+RUN pip install fastapi uvicorn paho-mqtt sqlalchemy influxdb pyzbar requests pillow
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1884:1883" # Tu puerto actual
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:1.8 # Mantengo la 1.8 que es más sencilla de integrar si ya la usabas
+    ports:
+      - "8086:8086"
+    volumes:
+      - ./influxdb/data:/var/lib/influxdb
+    restart: unless-stopped
+
+  backend_baterias:
+    build: ./backend
+    container_name: bateria_api
+    depends_on:
+      - mosquitto
+      - influxdb
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app # Mapea la carpeta para que edites el código sin reconstruir el container
+    restart: unless-stopped

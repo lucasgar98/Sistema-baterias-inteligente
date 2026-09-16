@@ -1,0 +1,31 @@
+#include <Arduino.h>
+#include <ESP32QRCodeReader.h>
+
+// Instanciamos el lector configurado para el modelo clásico de ESP-CAM
+ESP32QRCodeReader reader(CAMERA_MODEL_AI_THINKER);
+
+void setup() {
+  // Inicializamos el puerto Serial a 115200 baudios. 
+  // ¡Este es el puerto U0T/U0R que conectaste al Master!
+  Serial.begin(115200); 
+  
+  // Configuramos e iniciamos la cámara
+  reader.setup();
+  reader.begin();
+}
+
+void loop() {
+  struct QRCodeData qrCodeData;
+
+  // Intenta leer un código QR del frame actual
+  if (reader.receiveQrCode(&qrCodeData, 100)) {
+    if (qrCodeData.valid) {
+      // Si el QR es válido, escupe el contenido de texto por el pin TX
+      Serial.println((const char *)qrCodeData.payload);
+      
+      // Metemos una pausa de 3 segundos para que no te bombardee 
+      // el Master mandando el mismo código 50 veces por segundo
+      delay(3000); 
+    }
+  }
+}

@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controlador de Baterías</title>
+    <meta name="description" content="Panel de control y monitoreo de baterías — telemetría en vivo, historial de ciclos y diagnóstico.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base: #0f1117;
+            --bg-panel: #1a1d27;
+            --bg-card: #21242f;
+            --bg-hover: #282c3a;
+            --border: #2a2d3a;
+            --border-light: #363a4a;
+            --text-primary: #e4e4e7;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent-cyan: #22d3ee;
+            --accent-violet: #a78bfa;
+            --accent-red: #f87171;
+            --accent-green: #4ade80;
+            --accent-yellow: #fbbf24;
+            --accent-orange: #fb923c;
+            --font-ui: 'Inter', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius: 8px;
+            --transition: 150ms ease;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* --- LAYOUT --- */
+        .app { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* QR Input */
+        .qr-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .qr-input-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .qr-input-group input {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--accent-yellow);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: var(--radius);
+            width: 160px;
+            outline: none;
+            transition: border-color var(--transition);
+        }
+        .qr-input-group input:focus { border-color: var(--accent-yellow); }
+        .qr-input-group input::placeholder { color: var(--text-muted); }
+
+        .btn-sm {
+            font-family: var(--font-ui);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background var(--transition), border-color var(--transition);
+            white-space: nowrap;
+        }
+        .btn-sm:hover { background: var(--bg-hover); border-color: var(--border-light); }
+
+        /* Connection indicator */
+        .conn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+        }
+        .conn-dot.off { background: var(--accent-red); }
+
+        /* --- GRID --- */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        @media (max-width: 900px) {
+            .bottom-grid { grid-template-columns: 1fr; }
+        }
+
+        /* --- PANELS --- */
+        .panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+        }
+        .panel-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        /* --- METRICS --- */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .metric {
+            background: var(--bg-card);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+        .metric-label {
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-family: var(--font-mono);
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .metric-value.small { font-size: 14px; }
+
+        .metric-full { grid-column: 1 / -1; }
+
+        /* Estado */
+        .estado-badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 4px;
+            text-align: center;
+            width: 100%;
+            letter-spacing: 0.03em;
+        }
+        .estado-reposo { background: #1f2937; color: var(--text-secondary); }
+        .estado-cargando { background: #064e3b; color: var(--accent-green); }
+        .estado-descargando { background: #78350f; color: var(--accent-yellow); }
+        .estado-error { background: #7f1d1d; color: var(--accent-red); }
+
+        /* --- CONFIG SECTION --- */
+        .config-group {
+            margin-bottom: 10px;
+        }
+        .config-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+            font-weight: 500;
+        }
+        .config-group select,
+        .config-group input {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            font-size: 12px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color var(--transition);
+        }
+        .config-group select:focus,
+        .config-group input:focus { border-color: var(--accent-cyan); }
+        .config-row {
+            display: flex;
+            gap: 6px;
+            align-items: flex-end;
+        }
+        .config-row .config-group { flex: 1; }
+
+        /* --- BUTTONS --- */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .btn {
+            font-family: var(--font-ui);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 10px 8px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: opacity var(--transition), transform 80ms ease;
+            letter-spacing: 0.02em;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-charge { background: #16a34a; color: #fff; }
+        .btn-charge:hover { opacity: 0.85; }
+        .btn-discharge { background: #d97706; color: #000; }
+        .btn-discharge:hover { opacity: 0.85; }
+        .btn-auto { background: #2563eb; color: #fff; grid-column: 1 / -1; }
+        .btn-auto:hover { opacity: 0.85; }
+        .btn-stop { background: #dc2626; color: #fff; grid-column: 1 / -1; font-size: 14px; padding: 12px; }
+        .btn-stop:hover { opacity: 0.85; }
+
+        /* --- CHART --- */
+        .chart-container {
+            position: relative;
+            height: 380px;
+        }
+
+        /* --- TABLES --- */
+        .table-wrap {
+            overflow-y: auto;
+            max-height: 280px;
+        }
+        .table-wrap::-webkit-scrollbar { width: 4px; }
+        .table-wrap::-webkit-scrollbar-track { background: transparent; }
+        .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead { position: sticky; top: 0; z-index: 1; }
+        thead th {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            text-align: left;
+            padding: 8px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+        }
+        tbody td {
+            font-size: 12px;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tbody tr { transition: background var(--transition); }
+        tbody tr:hover { background: var(--bg-card); }
+        tbody tr.clickable { cursor: pointer; }
+
+        .td-mono {
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        .td-qr {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-cyan);
+        }
+        .td-soh { color: var(--accent-green); font-size: 10px; }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .panel-header .panel-title { margin-bottom: 0; }
+        .panel-actions { display: flex; gap: 6px; align-items: center; }
+
+        /* Filter select */
+        .filter-select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            font-size: 11px;
+            padding: 4px 6px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        /* --- MODAL --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            width: 90%;
+            max-width: 720px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .modal::-webkit-scrollbar { width: 4px; }
+        .modal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-header h2 {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+
+        .modal-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .modal-stat {
+            background: var(--bg-card);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+        .modal-stat .metric-label { margin-bottom: 4px; }
+        .modal-stat .metric-value { font-size: 16px; }
+
+        .modal-chart { height: 200px; margin-bottom: 20px; }
+
+        .modal-table-wrap { max-height: 200px; overflow-y: auto; }
+        .modal-table-wrap::-webkit-scrollbar { width: 4px; }
+        .modal-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* Temp bar */
+        .temp-section {
+            background: var(--bg-card);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+        .temp-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .temp-row .metric-label { margin: 0; }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+
+    <!-- HEADER -->
+    <header class="header" id="app-header">
+        <h1>Controlador de Baterías</h1>
+        <div class="header-right">
+            <div class="qr-input-group">
+                <label for="input-qr">Batería QR</label>
+                <input type="text" id="input-qr" placeholder="Código batería..." spellcheck="false">
+                <button class="btn-sm" id="btn-asignar-qr" onclick="asignarQR()">Asignar</button>
+                <button class="btn-sm" id="btn-escanear-qr" onclick="escanearConCamara()" style="background: var(--bg-hover); border-color: var(--accent-cyan); color: var(--accent-cyan);">📷 Escanear</button>
+            </div>
+            <div class="conn-indicator">
+                <div class="conn-dot" id="conn-dot"></div>
+                <span id="conn-text">Conectado</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN: Control + Chart -->
+    <div class="main-grid">
+
+        <!-- LEFT: Panel de Control -->
+        <div class="panel" id="panel-control">
+            <div class="panel-title">Telemetría</div>
+
+            <!-- Estado -->
+            <div style="margin-bottom: 10px;">
+                <span class="estado-badge estado-reposo" id="badge-estado">REPOSO</span>
+            </div>
+
+            <!-- QR actual -->
+            <div class="metric metric-full" style="margin-bottom: 10px;">
+                <div class="metric-label">Batería activa</div>
+                <div class="metric-value small" id="val-qr" style="color: var(--accent-yellow);">NINGUNA</div>
+            </div>
+
+            <!-- V, I -->
+            <div class="metrics-grid">
+                <div class="metric">
+                    <div class="metric-label">Tensión</div>
+                    <div class="metric-value" id="val-v" style="color: var(--accent-cyan);">0.00<span style="font-size:12px;opacity:0.6;"> V</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Corriente</div>
+                    <div class="metric-value" id="val-i" style="color: var(--accent-violet);">0<span style="font-size:12px;opacity:0.6;"> mA</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Capacidad</div>
+                    <div class="metric-value small" id="val-ah" style="color: var(--accent-green);">0.000<span style="font-size:11px;opacity:0.6;"> Ah</span></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">R. Interna</div>
+                    <div class="metric-value small" id="val-ri" style="color: var(--accent-orange);">0<span style="font-size:11px;opacity:0.6;"> mΩ</span></div>
+                </div>
+            </div>
+
+            <!-- Temperatura -->
+            <div class="temp-section">
+                <div class="temp-row">
+                    <span class="metric-label">Temperatura</span>
+                    <span class="td-mono" style="color: var(--accent-red);">
+                        <span id="val-t">0.0</span>°C / <span id="val-tmax">0.0</span>°C
+                    </span>
+                </div>
+            </div>
+
+            <!-- Config -->
+            <div class="config-group">
+                <label>Perfil de batería</label>
+                <select id="select-perfil" onchange="cambiarPerfil(this.value)">
+                    <option value="">Seleccionar...</option>
+                    <option value="LI-ION-2S">Li-Ion 2S (8.4V)</option>
+                    <option value="LI-ION-3S">Li-Ion 3S (12.6V)</option>
+                    <option value="PB-12V">Plomo 12V (14.4V)</option>
+                    <option value="NiMH-7.2V" selected>NiMH 7.2V</option>
+                    <option value="PERSONALIZADO">Personalizado (Manual)</option>
+                </select>
+            </div>
+            <div class="config-row">
+                <div class="config-group">
+                    <label>Cap. nominal (Ah)</label>
+                    <input type="number" id="input-cap" step="0.1" value="6.5">
+                </div>
+                <div style="padding-bottom:1px;">
+                    <button class="btn-sm" onclick="configurarNominal()">OK</button>
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="btn-grid">
+                <button class="btn btn-charge" id="btn-cargar" onclick="enviarComando('START_C')">CARGAR</button>
+                <button class="btn btn-discharge" id="btn-descargar" onclick="enviarComando('START_D')">DESCARGAR</button>
+                <button class="btn btn-auto" id="btn-auto" onclick="enviarComando('START_AUTO')">TEST AUTO (CICLO COMPLETO)</button>
+                <button class="btn btn-stop" id="btn-parar" onclick="enviarComando('STOP_ALL')">PARAR TODO</button>
+            </div>
+        </div>
+
+        <!-- RIGHT: Charts -->
+        <div class="panel" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="panel-header" style="margin-bottom: 0;">
+                <span class="panel-title">Monitoreo Gráfico</span>
+                <div class="panel-actions" style="gap: 10px;">
+                    <button class="btn-sm" id="btn-chart-ctrls-toggle" onclick="toggleChartCtrls()">⚙️ Controles</button>
+                    <button class="btn-sm" onclick="restablecerDefaults()">Default</button>
+                    <button class="btn-sm" onclick="toggleExportMenu()">💾 Exportar</button>
+                </div>
+            </div>
+
+            <!-- Configuration panel for scales & timebase (collapsible) -->
+            <div id="chart-controls-panel" style="display: none; background: var(--bg-card); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); gap: 12px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 120px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Base de Tiempo (Puntos)</label>
+                    <select id="select-timebase" onchange="actualizarTimebase(this.value)" style="width: 100%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 12px; outline: none;">
+                        <option value="50">50 puntos (~1.5 min)</option>
+                        <option value="100" selected>100 puntos (~3 min)</option>
+                        <option value="200">200 puntos (~6 min)</option>
+                        <option value="500">500 puntos (~15 min)</option>
+                        <option value="1000">1000 puntos (~30 min)</option>
+                    </select>
+                </div>
+                <div style="flex: 1; min-width: 140px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Voltaje (V)</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="scale-v-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                        <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <input type="number" id="scale-v-max" value="16" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                    </div>
+                </div>
+                <div style="flex: 1; min-width: 140px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Corriente (mA)</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="scale-i-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                        <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <input type="number" id="scale-i-max" value="2000" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                    </div>
+                </div>
+                <div style="flex: 1; min-width: 140px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Temp (°C)</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="scale-t-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                        <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <input type="number" id="scale-t-max" value="60" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Menu (collapsible) -->
+            <div id="export-menu-panel" style="display: none; background: var(--bg-card); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); gap: 10px; flex-direction: column;">
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Exportar Imagen del Gráfico (PNG)</div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button class="btn-sm" onclick="exportarImagen('voltaje')">Voltaje</button>
+                    <button class="btn-sm" onclick="exportarImagen('corriente')">Corriente</button>
+                    <button class="btn-sm" onclick="exportarImagen('temperatura')">Temperatura</button>
+                    <button class="btn-sm" onclick="exportarImagen('todos')">Todos juntos</button>
+                </div>
+                <div style="height: 1px; background: var(--border); margin: 4px 0;"></div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Exportar Datos de Sesión Activa (CSV)</div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button class="btn-sm" onclick="exportarDatosSesion('voltaje')">Datos Voltaje</button>
+                    <button class="btn-sm" onclick="exportarDatosSesion('corriente')">Datos Corriente</button>
+                    <button class="btn-sm" onclick="exportarDatosSesion('temperatura')">Datos Temp</button>
+                    <button class="btn-sm" onclick="exportarDatosSesion('todos')">Todos los Datos</button>
+                </div>
+            </div>
+
+            <!-- Charts Column -->
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+                <!-- Card Voltaje -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Voltaje</span>
+                        <span id="chart-val-v" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-cyan);">0.00 V</span>
+                    </div>
+                    <div style="height: 95px; position: relative;">
+                        <canvas id="chartVoltaje"></canvas>
+                    </div>
+                </div>
+
+                <!-- Card Corriente -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Corriente</span>
+                        <span id="chart-val-i" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-violet);">0 mA</span>
+                    </div>
+                    <div style="height: 95px; position: relative;">
+                        <canvas id="chartCorriente"></canvas>
+                    </div>
+                </div>
+
+                <!-- Card Temperatura -->
+                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Temperatura</span>
+                        <span id="chart-val-t" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-red);">0.0 °C</span>
+                    </div>
+                    <div style="height: 95px; position: relative;">
+                        <canvas id="chartTemperatura"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM: Inventario + Historial -->
+    <div class="bottom-grid">
+
+        <!-- Inventario -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Inventario de baterías</span>
+                <div class="panel-actions">
+                    <button class="btn-sm" onclick="cargarInventario()">Refrescar</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>QR</th>
+                        <th>Fecha registro</th>
+                        <th>Ciclos</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="tbody-inventario"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Historial -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Historial de ciclos</span>
+                <div class="panel-actions">
+                    <select class="filter-select" id="filtro-qr" onchange="cargarHistorial()">
+                        <option value="">Todas</option>
+                    </select>
+                    <a href="/exportar" class="btn-sm" style="text-decoration:none;">CSV</a>
+                    <button class="btn-sm" onclick="cargarHistorial()">Refrescar</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Batería</th>
+                        <th>Tipo</th>
+                        <th>Ah</th>
+                        <th>SoH</th>
+                        <th>RI</th>
+                        <th>T Max</th>
+                    </tr></thead>
+                    <tbody id="tbody-historial"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Detalle Batería -->
+<div class="modal-overlay" id="modal-detalle">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modal-titulo">Batería: ---</h2>
+            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        </div>
+        <div class="modal-stats" id="modal-stats"></div>
+        <div class="panel-title">Tendencia SoH</div>
+        <div class="modal-chart">
+            <canvas id="chartTendencia"></canvas>
+        </div>
+        <div class="panel-title">Ciclos</div>
+        <div class="modal-table-wrap">
+            <table>
+                <thead><tr>
+                    <th>Tipo</th>
+                    <th>Fecha</th>
+                    <th>Ah</th>
+                    <th>SoH</th>
+                    <th>RI mΩ</th>
+                    <th>V Final</th>
+                    <th>T Max</th>
+                </tr></thead>
+                <tbody id="tbody-modal-ciclos"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Cámara -->
+<div class="modal-overlay" id="modal-camara">
+    <div class="modal" style="max-width: 480px; text-align: center;">
+        <div class="modal-header">
+            <h2>Escanear Código QR</h2>
+            <button class="modal-close" onclick="cerrarModalCamara()">&times;</button>
+        </div>
+        <div style="position: relative; width: 100%; height: 320px; background: #000; border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);">
+            <img id="camara-feed" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none; transform: rotate(90deg);" />
+            <div id="camara-cargando" style="display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text-secondary);">
+                <div style="width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span style="font-size: 13px;">Conectando con ESP32-CAM...</span>
+            </div>
+        </div>
+        <div style="margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
+            Apunta la cámara al código QR de la batería. Se cerrará automáticamente al decodificar.
+        </div>
+    </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let maxPoints = 100;
+let chartTendencia = null;
+let connOk = true;
+
+// --- CHART SETUP ---
+const optCommon = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+        legend: {
+            labels: { color: '#9ca3af', font: { family: 'Inter', size: 10 }, boxWidth: 10, padding: 4 },
+            position: 'top'
+        }
+    },
+    scales: {
+        x: {
+            ticks: { color: '#6b7280', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 10 },
+            grid: { color: '#1f2233' }
+        },
+        y: {
+            type: 'linear',
+            ticks: { color: '#9ca3af', font: { size: 9 } },
+            grid: { color: '#1f2233' }
+        }
+    }
+};
+
+const ctxV = document.getElementById('chartVoltaje').getContext('2d');
+const chartV = new Chart(ctxV, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Voltaje (V)',
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34,211,238,0.05)',
+            data: [],
+            borderWidth: 1.5,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        ...optCommon,
+        scales: {
+            ...optCommon.scales,
+            y: { ...optCommon.scales.y, min: 0, max: 16 }
+        }
+    }
+});
+
+const ctxI = document.getElementById('chartCorriente').getContext('2d');
+const chartI = new Chart(ctxI, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Corriente (mA)',
+            borderColor: '#a78bfa',
+            backgroundColor: 'rgba(167,139,250,0.05)',
+            data: [],
+            borderWidth: 1.5,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        ...optCommon,
+        scales: {
+            ...optCommon.scales,
+            y: { ...optCommon.scales.y, min: 0, max: 2000 }
+        }
+    }
+});
+
+const ctxT = document.getElementById('chartTemperatura').getContext('2d');
+const chartT = new Chart(ctxT, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Temperatura (°C)',
+            borderColor: '#f87171',
+            backgroundColor: 'rgba(248,113,113,0.05)',
+            data: [],
+            borderWidth: 1.5,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        ...optCommon,
+        scales: {
+            ...optCommon.scales,
+            y: { ...optCommon.scales.y, min: 0, max: 60 }
+        }
+    }
+});
+
+// --- CHART CONTROLS FUNCTIONS ---
+function toggleChartCtrls() {
+    const p = document.getElementById('chart-controls-panel');
+    p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+}
+
+function toggleExportMenu() {
+    const p = document.getElementById('export-menu-panel');
+    p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+}
+
+function actualizarTimebase(val) {
+    maxPoints = parseInt(val) || 100;
+    [chartV, chartI, chartT].forEach(c => {
+        while (c.data.labels.length > maxPoints) {
+            c.data.labels.shift();
+            c.data.datasets[0].data.shift();
+        }
+        c.update();
+    });
+}
+
+function actualizarEscalas() {
+    const vMin = parseFloat(document.getElementById('scale-v-min').value);
+    const vMax = parseFloat(document.getElementById('scale-v-max').value);
+    const iMin = parseFloat(document.getElementById('scale-i-min').value);
+    const iMax = parseFloat(document.getElementById('scale-i-max').value);
+    const tMin = parseFloat(document.getElementById('scale-t-min').value);
+    const tMax = parseFloat(document.getElementById('scale-t-max').value);
+
+    if (!isNaN(vMin)) chartV.options.scales.y.min = vMin;
+    if (!isNaN(vMax)) chartV.options.scales.y.max = vMax;
+    chartV.update();
+
+    if (!isNaN(iMin)) chartI.options.scales.y.min = iMin;
+    if (!isNaN(iMax)) chartI.options.scales.y.max = iMax;
+    chartI.update();
+
+    if (!isNaN(tMin)) chartT.options.scales.y.min = tMin;
+    if (!isNaN(tMax)) chartT.options.scales.y.max = tMax;
+    chartT.update();
+}
+
+function restablecerDefaults() {
+    document.getElementById('select-timebase').value = "100";
+    maxPoints = 100;
+
+    document.getElementById('scale-v-min').value = 0;
+    document.getElementById('scale-v-max').value = 16;
+    document.getElementById('scale-i-min').value = 0;
+    document.getElementById('scale-i-max').value = 2000;
+    document.getElementById('scale-t-min').value = 0;
+    document.getElementById('scale-t-max').value = 60;
+
+    actualizarEscalas();
+    actualizarTimebase(100);
+}
+
+function exportarImagen(param) {
+    const downloadImg = (chartObj, filename) => {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = chartObj.toBase64Image();
+        link.click();
+    };
+
+    if (param === 'voltaje') {
+        downloadImg(chartV, 'grafico_voltaje.png');
+    } else if (param === 'corriente') {
+        downloadImg(chartI, 'grafico_corriente.png');
+    } else if (param === 'temperatura') {
+        downloadImg(chartT, 'grafico_temperatura.png');
+    } else if (param === 'todos') {
+        downloadImg(chartV, 'grafico_voltaje.png');
+        setTimeout(() => downloadImg(chartI, 'grafico_corriente.png'), 200);
+        setTimeout(() => downloadImg(chartT, 'grafico_temperatura.png'), 400);
+    }
+}
+
+function exportarDatosSesion(param) {
+    const labels = chartV.data.labels;
+    const voltajes = chartV.data.datasets[0].data;
+    const corrientes = chartI.data.datasets[0].data;
+    const temperaturas = chartT.data.datasets[0].data;
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    if (param === 'voltaje') {
+        csvContent += "Tiempo,Voltaje (V)\n";
+        labels.forEach((l, i) => {
+            csvContent += `${l},${voltajes[i] || 0}\n`;
+        });
+    } else if (param === 'corriente') {
+        csvContent += "Tiempo,Corriente (mA)\n";
+        labels.forEach((l, i) => {
+            csvContent += `${l},${corrientes[i] || 0}\n`;
+        });
+    } else if (param === 'temperatura') {
+        csvContent += "Tiempo,Temperatura (C)\n";
+        labels.forEach((l, i) => {
+            csvContent += `${l},${temperaturas[i] || 0}\n`;
+        });
+    } else {
+        csvContent += "Tiempo,Voltaje (V),Corriente (mA),Temperatura (C)\n";
+        labels.forEach((l, i) => {
+            csvContent += `${l},${voltajes[i] || 0},${corrientes[i] || 0},${temperaturas[i] || 0}\n`;
+        });
+    }
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `datos_sesion_${param}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// --- API CALLS ---
+async function enviarComando(accion) {
+    try {
+        await fetch(`${API}/comando/${accion}`, { method: 'POST' });
+    } catch(e) { console.error('Error comando:', e); }
+}
+
+async function cambiarPerfil(tipo) {
+    if (!tipo) return;
+    try {
+        const r = await fetch(`${API}/perfil?tipo=${tipo}`, { method: 'POST' });
+        const d = await r.json();
+        console.log('Perfil:', d);
+    } catch(e) { console.error(e); }
+}
+
+async function configurarNominal() {
+    const val = document.getElementById('input-cap').value;
+    try {
+        await fetch(`${API}/set_nominal?valor=${val}`, { method: 'POST' });
+    } catch(e) { console.error(e); }
+}
+
+async function asignarQR() {
+    const qr = document.getElementById('input-qr').value.trim();
+    if (!qr || qr.length < 2) return;
+    try {
+        const r = await fetch(`${API}/set_qr?qr=${encodeURIComponent(qr)}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.status === 'QR asignado') {
+            document.getElementById('val-qr').textContent = qr;
+        }
+    } catch(e) { console.error(e); }
+}
+
+let intervalPollQR = null;
+
+function escanearConCamara() {
+    const modal = document.getElementById('modal-camara');
+    const img = document.getElementById('camara-feed');
+    const loader = document.getElementById('camara-cargando');
+    const qrInicial = document.getElementById('val-qr').textContent;
+
+    // Abrir modal
+    modal.classList.add('open');
+    img.style.display = 'none';
+    loader.style.display = 'flex';
+
+    // Iniciar transmisión de video
+    img.src = `${API}/video_feed?_=${Date.now()}`;
+    img.onload = () => {
+        loader.style.display = 'none';
+        img.style.display = 'block';
+    };
+    img.onerror = () => {
+        loader.style.display = 'flex';
+        img.style.display = 'none';
+        console.error("Error al cargar stream de video.");
+    };
+
+    // Polling del estado actual cada 1 segundo para ver si el QR cambió
+    intervalPollQR = setInterval(async () => {
+        try {
+            const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
+            const d = await r.json();
+            if (d.qr_actual && d.qr_actual !== 'NINGUNA' && d.qr_actual !== qrInicial) {
+                const nuevoQR = d.qr_actual;
+                cerrarModalCamara();
+                document.getElementById('input-qr').value = nuevoQR;
+                document.getElementById('val-qr').textContent = nuevoQR;
+                alert(`¡QR decodificado con éxito!: ${nuevoQR}`);
+            }
+        } catch(e) {
+            console.error("Error en polling de QR:", e);
+        }
+    }, 1000);
+}
+
+function cerrarModalCamara() {
+    const modal = document.getElementById('modal-camara');
+    const img = document.getElementById('camara-feed');
+    
+    modal.classList.remove('open');
+    img.removeAttribute('src');
+    
+    if (intervalPollQR) {
+        clearInterval(intervalPollQR);
+        intervalPollQR = null;
+    }
+}
+
+// --- ESTADO POLLING ---
+let ultimoEstado = 'REPOSO';
+
+async function actualizarEstado() {
+    try {
+        const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
+        const d = await r.json();
+
+        // Connection
+        if (d.esp32_online) {
+            connOk = true;
+            document.getElementById('conn-dot').classList.remove('off');
+            document.getElementById('conn-text').textContent = 'Conectado';
+        } else {
+            document.getElementById('conn-dot').classList.add('off');
+            document.getElementById('conn-text').textContent = 'ESP32 Offline';
+        }
+
+        // Values
+        document.getElementById('val-qr').textContent = d.qr_actual || 'NINGUNA';
+        document.getElementById('val-v').innerHTML = d.v_actual.toFixed(2) + '<span style="font-size:12px;opacity:0.6;"> V</span>';
+        document.getElementById('val-i').innerHTML = Math.round(d.i_actual) + '<span style="font-size:12px;opacity:0.6;"> mA</span>';
+        document.getElementById('val-t').textContent = d.t_actual.toFixed(1);
+        document.getElementById('val-tmax').textContent = d.temp_maxima.toFixed(1);
+        document.getElementById('val-ah').innerHTML = d.ah_acumulado.toFixed(3) + '<span style="font-size:11px;opacity:0.6;"> Ah</span>';
+        document.getElementById('val-ri').innerHTML = Math.round(d.ri_calculada) + '<span style="font-size:11px;opacity:0.6;"> mΩ</span>';
+
+        // Chart values
+        document.getElementById('chart-val-v').textContent = d.v_actual.toFixed(2) + ' V';
+        document.getElementById('chart-val-i').textContent = Math.round(d.i_actual) + ' mA';
+        document.getElementById('chart-val-t').textContent = d.t_actual.toFixed(1) + ' °C';
+
+        // Update QR input placeholder
+        if (d.qr_actual && d.qr_actual !== 'NINGUNA') {
+            document.getElementById('input-qr').placeholder = d.qr_actual;
+        }
+
+        // Update profile selector value to match the active profile
+        const selectPerfil = document.getElementById('select-perfil');
+        if (d.perfil_actual && selectPerfil.value !== d.perfil_actual) {
+            if ([...selectPerfil.options].some(opt => opt.value === d.perfil_actual)) {
+                selectPerfil.value = d.perfil_actual;
+            }
+        }
+
+        // Estado badge
+        const badge = document.getElementById('badge-estado');
+        const est = d.estado_anterior || 'REPOSO';
+        badge.textContent = est;
+        badge.className = 'estado-badge ' + (
+            est === 'CARGANDO' ? 'estado-cargando' :
+            est === 'DESCARGANDO' ? 'estado-descargando' :
+            est === 'ERROR_TEMP' ? 'estado-error' : 'estado-reposo'
+        );
+
+        // Chart
+        const ahora = new Date().toLocaleTimeString('es-AR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        chartV.data.labels.push(ahora);
+        chartV.data.datasets[0].data.push(d.v_actual);
+        if (chartV.data.labels.length > maxPoints) {
+            chartV.data.labels.shift();
+            chartV.data.datasets[0].data.shift();
+        }
+        chartV.update();
+
+        chartI.data.labels.push(ahora);
+        chartI.data.datasets[0].data.push(d.i_actual);
+        if (chartI.data.labels.length > maxPoints) {
+            chartI.data.labels.shift();
+            chartI.data.datasets[0].data.shift();
+        }
+        chartI.update();
+
+        chartT.data.labels.push(ahora);
+        chartT.data.datasets[0].data.push(d.t_actual);
+        if (chartT.data.labels.length > maxPoints) {
+            chartT.data.labels.shift();
+            chartT.data.datasets[0].data.shift();
+        }
+        chartT.update();
+
+        // Auto-refresh tables on state change
+        if (est === 'REPOSO' && ultimoEstado !== 'REPOSO') {
+            cargarInventario();
+            cargarHistorial();
+        }
+        ultimoEstado = est;
+
+    } catch(e) {
+        if (connOk) {
+            connOk = false;
+            document.getElementById('conn-dot').classList.add('off');
+            document.getElementById('conn-text').textContent = 'Sin conexión';
+        }
+    }
+}
+
+// --- INVENTARIO ---
+async function cargarInventario() {
+    try {
+        const r = await fetch(`${API}/baterias`);
+        const bats = await r.json();
+        const tbody = document.getElementById('tbody-inventario');
+        const filtro = document.getElementById('filtro-qr');
+        const filtroActual = filtro.value;
+
+        tbody.innerHTML = '';
+        // Update filter options
+        const qrs = bats.map(b => b.qr_id);
+        filtro.innerHTML = '<option value="">Todas</option>' + qrs.map(q =>
+            `<option value="${q}" ${q === filtroActual ? 'selected' : ''}>${q}</option>`
+        ).join('');
+
+        for (const bat of bats) {
+            const tr = document.createElement('tr');
+            tr.className = 'clickable';
+            tr.onclick = () => verDetalle(bat.qr_id);
+            tr.innerHTML = `
+                <td class="td-qr">${bat.qr_id}</td>
+                <td class="td-mono">${bat.fecha_registro ? new Date(bat.fecha_registro).toLocaleDateString('es-AR') : '—'}</td>
+                <td class="td-mono">${bat.ciclos_count !== undefined ? bat.ciclos_count : '—'}</td>
+                <td><button class="btn-sm" onclick="event.stopPropagation(); verDetalle('${bat.qr_id}')">Ver</button></td>
+            `;
+            tbody.appendChild(tr);
+        }
+    } catch(e) { console.error(e); }
+}
+
+// --- HISTORIAL ---
+async function cargarHistorial() {
+    try {
+        const filtroQR = document.getElementById('filtro-qr').value;
+        const url = filtroQR ? `${API}/historial/${encodeURIComponent(filtroQR)}` : `${API}/historial`;
+        const r = await fetch(url);
+        const hist = await r.json();
+        const tbody = document.getElementById('tbody-historial');
+        tbody.innerHTML = '';
+
+        hist.forEach(c => {
+            const tr = document.createElement('tr');
+            const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
+            
+            let tipoLabel = '❓ Desconocido';
+            if (c.tipo_ciclo.includes('CARGANDO')) {
+                tipoLabel = '⚡ Carga';
+            } else if (c.tipo_ciclo.includes('DESCARGANDO')) {
+                tipoLabel = '🔋 Descarga';
+            }
+            if (c.tipo_ciclo.includes('Interrumpido')) {
+                tipoLabel += ' <span style="color:var(--accent-orange);font-size:10px;font-weight:600;">⚠️ Interr</span>';
+            }
+
+            tr.innerHTML = `
+                <td class="td-qr">${c.qr_id}</td>
+                <td class="td-mono">${tipoLabel}</td>
+                <td class="td-mono">${c.capacidad_ah.toFixed(3)}</td>
+                <td class="td-soh">${soh}</td>
+                <td class="td-mono">${Math.round(c.resistencia_interna)}</td>
+                <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch(e) { console.error(e); }
+}
+
+// --- MODAL DETALLE ---
+async function verDetalle(qr) {
+    document.getElementById('modal-detalle').classList.add('open');
+    document.getElementById('modal-titulo').textContent = `Batería: ${qr}`;
+    document.getElementById('modal-stats').innerHTML = '<div class="modal-stat"><div class="metric-label">Cargando...</div></div>';
+    document.getElementById('tbody-modal-ciclos').innerHTML = '';
+
+    try {
+        const r = await fetch(`${API}/bateria/${encodeURIComponent(qr)}`);
+        const data = await r.json();
+
+        if (data.status === 'Error') {
+            document.getElementById('modal-stats').innerHTML = '<div class="modal-stat"><div class="metric-value small">No encontrada</div></div>';
+            return;
+        }
+
+        const ciclos = data.ciclos || [];
+        const descargas = ciclos.filter(c => c.tipo_ciclo === 'DESCARGANDO');
+        const ultimoSoH = descargas.length > 0 ? descargas[0].soh_porcentaje : 0;
+        const ultimaRI = descargas.length > 0 ? descargas[0].resistencia_interna : 0;
+
+        // Stats
+        document.getElementById('modal-stats').innerHTML = `
+            <div class="modal-stat">
+                <div class="metric-label">Total ciclos</div>
+                <div class="metric-value" style="color:var(--accent-cyan);">${data.total_ciclos}</div>
+            </div>
+            <div class="modal-stat">
+                <div class="metric-label">Último SoH</div>
+                <div class="metric-value" style="color:var(--accent-green);">${ultimoSoH > 0 ? ultimoSoH.toFixed(1) + '%' : '—'}</div>
+            </div>
+            <div class="modal-stat">
+                <div class="metric-label">Última RI</div>
+                <div class="metric-value" style="color:var(--accent-orange);">${ultimaRI > 0 ? Math.round(ultimaRI) + ' mΩ' : '—'}</div>
+            </div>
+        `;
+
+        // SoH Chart
+        const ctxT = document.getElementById('chartTendencia').getContext('2d');
+        if (chartTendencia) chartTendencia.destroy();
+        const descOrden = [...descargas].reverse();
+        chartTendencia = new Chart(ctxT, {
+            type: 'line',
+            data: {
+                labels: descOrden.map((_, i) => `Ciclo ${i + 1}`),
+                datasets: [{
+                    label: 'SoH %',
+                    data: descOrden.map(c => c.soh_porcentaje),
+                    borderColor: '#4ade80',
+                    backgroundColor: 'rgba(74,222,128,0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 1.5,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#4ade80'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2233' } },
+                    y: { min: 0, max: 100, ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2233' } }
+                }
+            }
+        });
+
+        // Cycles table
+        const tbody = document.getElementById('tbody-modal-ciclos');
+        tbody.innerHTML = '';
+        ciclos.forEach(c => {
+            const tr = document.createElement('tr');
+            const fecha = c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+            const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
+            
+            const esCarga = c.tipo_ciclo.includes('CARGANDO');
+            const esInterrumpido = c.tipo_ciclo.includes('Interrumpido');
+            const icon = esCarga ? '⚡' : '🔋';
+            const statusIndicator = esInterrumpido ? ' ⚠️' : '';
+
+            tr.innerHTML = `
+                <td class="td-mono">${icon}${statusIndicator}</td>
+                <td class="td-mono">${fecha}</td>
+                <td class="td-mono">${c.capacidad_ah.toFixed(3)}</td>
+                <td class="td-soh">${soh}</td>
+                <td class="td-mono">${Math.round(c.resistencia_interna)}</td>
+                <td class="td-mono" style="color:var(--accent-cyan);">${c.voltaje_final ? c.voltaje_final.toFixed(2) : '—'}</td>
+                <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch(e) { console.error(e); }
+}
+
+function cerrarModal() {
+    document.getElementById('modal-detalle').classList.remove('open');
+}
+
+// Close modal on overlay click
+document.getElementById('modal-detalle').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModal();
+});
+document.getElementById('modal-camara').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalCamara();
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        cerrarModal();
+        cerrarModalCamara();
+    }
+});
+
+// --- INIT ---
+setInterval(actualizarEstado, 2000);
+cargarInventario();
+cargarHistorial();
+</script>
+</body>
+</html>
