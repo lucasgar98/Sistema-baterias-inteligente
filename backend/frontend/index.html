@@ -3,113 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controlador de Baterías</title>
+    <title>Controlador de Baterías</title> <!-- Título de la pestaña -->
     <meta name="description" content="Panel de control y monitoreo de baterías — telemetría en vivo, historial de ciclos y diagnóstico.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com"> <!-- Fuentes de Google Fonts-->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- chart.js (Biblioteca de JS para insertar gráficos a la página )-->
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+        /* SELECTOR UNIVERSAL (se aplica a todos los elementos de la página) */
+        *, *::before, *::after { 
+            box-sizing: border-box;  /* El cálculo del ancho y alto de un elemento incluye el padding y el borde */
+            margin: 0;  /* Los cuatro márgenes (inferior, superior, izquierdo y derecho) valen 0 */
+            padding: 0;  /* Los cuatro paddings valen 0 */
+        }
+        /* VARIABLES GLOBALES; se declaran dentro del selector :root, el cual empareja el elemento
+        root del documento (etiqueta <html>) */
         :root {
+            /* ===== Paleta de colores ===== */
+            /* Colores de fondo */
             --bg-base: #0f1117;
             --bg-panel: #1a1d27;
             --bg-card: #21242f;
             --bg-hover: #282c3a;
+            /* Colores de los bordes */
             --border: #2a2d3a;
             --border-light: #363a4a;
+            /* Colores del texto */
             --text-primary: #e4e4e7;
             --text-secondary: #9ca3af;
             --text-muted: #6b7280;
+            /* Colores de otros elementos (botones, indicadores, gráficas, etc.) */
             --accent-cyan: #22d3ee;
             --accent-violet: #a78bfa;
             --accent-red: #f87171;
             --accent-green: #4ade80;
             --accent-yellow: #fbbf24;
             --accent-orange: #fb923c;
+            /* ===== Familia de fuentes ===== */
             --font-ui: 'Inter', -apple-system, sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
+            /* Radio */
             --radius: 8px;
-            --transition: 150ms ease;
+            /* Transición (permite cambiar los valores de una propiedad de manera suave) */
+            --transition: 150ms ease; /* Transición de 150 ms que arranca lento, luego va rápido y termina lento (valor ease) */
         }
-
+        /* --- BODY (CUERPO DE LA PÁGINA) --- */
         body {
-            font-family: var(--font-ui);
-            background: var(--bg-base);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.5;
+            font-family: var(--font-ui);  /* Familia de fuentes */
+            background: var(--bg-base);  /* Color de fondo */
+            color: var(--text-primary);  /* Color de texto */
+            min-height: 100vh;  /* Altura mínima (100% de la altura de la ventana gráfica o viewport) */
+            line-height: 1.5; /* Altura de un renglón (1.5 veces el tamaño de la fuente) */
         }
 
         /* --- LAYOUT --- */
-        .app { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
-
+        /* Pantalla principal */
+        .app { 
+            max-width: 1280px;  /* Ancho máximo */
+            margin: 0 auto;  /* Margen inferior y superior 0, margen izquierdo y derecho calculados automáticamente por el navegador */
+            padding: 20px 24px;  /* Padding inferior y superior de 20px, padding izquierdo y derecho de 24px */
+        }
+        /* Header de la pantalla principal */
         .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 20px;
-            gap: 16px;
-            flex-wrap: wrap;
+            display: flex;  /* Contenedor flex */
+            align-items: center;  /* Alineación central a lo largo del eje secundario */
+            justify-content: space-between; /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+            padding-bottom: 16px;  /* Padding inferior */
+            border-bottom: 1px solid var(--border); /* Borde inferior sólido de 1px */
+            margin-bottom: 20px;  /* Margen inferior */
+            gap: 16px;  /* Separación entre filas y columnas dentro del contenedor flex */
+            flex-wrap: wrap;  /* Permite a los ítems flexibles pasar a la siguiente línea si no caben en el contenedor */
         }
+        /* Título dentro del header */
         .header h1 {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            white-space: nowrap;
+            font-size: 18px;  /* Tamaño de fuente */
+            font-weight: 700;  /* Grosor de la fuente (negrita) */
+            letter-spacing: -0.02em; /* Espaciado entre letras (lo reducimos en 0.02 veces el tamaño de la fuente del navegador) */
+            white-space: nowrap; /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
         }
+        /* Parte derecha del encabezado */
         .header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
+            display: flex;  /* Contenedor flex */
+            align-items: center; /* Alineación central a lo largo del eje secundario */
+            gap: 20px;  /* Separación entre filas y columnas dentro del contenedor flex */
+            flex-wrap: wrap;  /* Los ítems del flex pasan a la siguiente línea si no caben en el contenedor */
         }
 
         /* QR Input */
+        /* Contenedor que agrupa las opciones de QR */
         .qr-input-group {
             display: flex;
             align-items: center;
             gap: 8px;
         }
+        /* Etiqueta dentro del contenedor QR (texto "Batería QR") */
         .qr-input-group label {
             font-size: 12px;
-            color: var(--text-secondary);
-            font-weight: 500;
-            white-space: nowrap;
+            color: var(--text-secondary);  /* Color del texto */
+            font-weight: 500;  /* Grosor de la fuente */
+            white-space: nowrap;  /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
         }
+        /* Campo de texto dentro del contenedor QR para ingresar el código de la batería */
         .qr-input-group input {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--accent-yellow);
+            background: var(--bg-card);  /* Color de fondo */
+            border: 1px solid var(--border);  /* Borde sólido de 1px */
+            color: var(--accent-yellow);  /* Color del texto (amarillo) */
             font-family: var(--font-mono);
             font-size: 13px;
-            padding: 6px 10px;
-            border-radius: var(--radius);
-            width: 160px;
-            outline: none;
-            transition: border-color var(--transition);
+            padding: 6px 10px;  /* Padding inferior y superior de 6px, padding izquierdo y derecho de 10px */
+            border-radius: var(--radius);  /* Borde redondeado */
+            width: 160px;  /* Ancho del elemento */
+            outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+            transition: border-color var(--transition);  /* Transición para el color del borde */
         }
+        /* Cambiamos el color del campo de texto al posicionar el cursor sobre él usando la pseudo-clase :focus */
         .qr-input-group input:focus { border-color: var(--accent-yellow); }
+        /* Fijamos el color del texto por defecto usando el pseudo-elemento ::placeholder */
         .qr-input-group input::placeholder { color: var(--text-muted); }
-
+        
+        /* Botones "Asignar" y "Escanear" */
         .btn-sm {
             font-family: var(--font-ui);
             font-size: 12px;
-            font-weight: 600;
-            padding: 6px 12px;
-            border-radius: var(--radius);
+            font-weight: 600;  /* Grosor del texto */
+            padding: 6px 12px;  /* Padding inferior y superior de 6px, padding derecho e izquierdo de 12px */
+            border-radius: var(--radius);  /* Borde redondeado */
             border: 1px solid var(--border);
-            background: var(--bg-card);
+            background: var(--bg-card);  /* Color de borde */
             color: var(--text-primary);
-            cursor: pointer;
-            transition: background var(--transition), border-color var(--transition);
-            white-space: nowrap;
+            cursor: pointer;  /* Cambia el cursor al posicionarlo sobre el botón */
+            transition: background var(--transition), border-color var(--transition);  /* Transición para el fondo y el color de borde */
+            white-space: nowrap;  /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
         }
+        /* Cambiamos el color de fondo y el color de borde al posicionar el cursor sobre el botón, usando la pseudo-clase :hover */
         .btn-sm:hover { background: var(--bg-hover); border-color: var(--border-light); }
 
         /* Connection indicator */
+        /* Contenedor del indicador de conexión */
         .conn-indicator {
             display: flex;
             align-items: center;
@@ -117,112 +146,126 @@
             font-size: 12px;
             color: var(--text-secondary);
         }
+        /* Punto que se ubica a la izquierda del texto de indicador de conexión */
         .conn-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--accent-green);
+            width: 8px;  /* Ancho de 8px */
+            height: 8px;  /* Altura de 8px */
+            border-radius: 50%;  /* Borde redondeado de 50% del tamaño del contenedor padre */
+            background: var(--accent-green);  /* Color de fondo (verde por defecto) */
         }
+        /* Permite cambiar el color de fondo del punto a rojo cuando no hay conexión */
         .conn-dot.off { background: var(--accent-red); }
 
         /* --- GRID --- */
+        /* Panel principal (panel de control + panel gráfico) */
         .main-grid {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 16px;
+            display: grid;  /* Contenedor grid (permite organizar el contenido de la página en filas y columnas)  */
+            grid-template-columns: 300px 1fr;  /* Primer columna de 300px; la segunda ocupa el espacio restante */
+            gap: 16px;  /* Separación de 16px entre las filas y las columnas */
         }
+        /* Media query para cambiar el tamaño de las columnas cuando el ancho de la pantalla cae por debajo de 900px.
+        De esta manera, los elementos de los grid quedan uno debajo del otro */
         @media (max-width: 900px) {
             .main-grid { grid-template-columns: 1fr; }
-        }
-
-        .bottom-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-top: 16px;
-        }
-        @media (max-width: 900px) {
             .bottom-grid { grid-template-columns: 1fr; }
+        }
+        /* Sección inferior de la página que muestra las tablas de inventario e historial de ciclos */
+        .bottom-grid {
+            display: grid;  /* Contenedor grid */
+            grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible */
+            gap: 16px;
+            margin-top: 16px;  /* Margen superior de 16 px */
         }
 
         /* --- PANELS --- */
+        /* Panel lateral (panel de control) */
         .panel {
             background: var(--bg-panel);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 16px;
         }
+        /* Título del panel lateral */
         .panel-title {
             font-size: 11px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--text-muted);
-            margin-bottom: 12px;
+            text-transform: uppercase;  /* Convertimos el texto a mayúscula */
+            letter-spacing: 0.06em;  /* Espaciado entre letras (lo aumentamos en 0.06 veces el tamaño de la fuente del navegador) */
+            color: var(--text-muted);  /* Color del texto */
+            margin-bottom: 12px;  /* Margen inferior */
         }
 
         /* --- METRICS --- */
+        /* Contenedor que agrupa las tarjetas que muestran los valores de cuatro variables */
         .metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            display: grid;  /* Contenedor grid */
+            grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible en el contenedor */
+            gap: 8px;  /* Separación entre elementos */
             margin-bottom: 12px;
         }
+        /* Tarjetas para mostrar los valores de las variables */
         .metric {
-            background: var(--bg-card);
-            border-radius: 6px;
-            padding: 10px;
-            text-align: center;
+            background: var(--bg-card);  /* Color de fondo */
+            border-radius: 6px;  /* Borde redondeado de 6px */
+            padding: 10px;  /* Padding total (inferior, superior, izquierdo y derecho) de 10px */
+            text-align: center;  /* Alineación del texto */
         }
+        /* Etiquetas que muestran el nombre de la variable */
         .metric-label {
             font-size: 10px;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            text-transform: uppercase;  /* Convertimos el texto a mayúscula */
+            letter-spacing: 0.05em;  /* Espaciado entre letras (lo aumentamos en 0.05 veces el tamaño de la fuente del navegador) */
             color: var(--text-muted);
             margin-bottom: 4px;
         }
+        /* Valores de las variables */
         .metric-value {
-            font-family: var(--font-mono);
+            font-family: var(--font-mono);  /* Familia de fuente (diferente a la fuente principal de la página) */
             font-size: 20px;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.2;  /* Altura de un renglón (1.2 veces el tamaño de la fuente) */
         }
+        /* Valores de la variables en formato pequeño (resistencia interna y capacidad) 
+        La clase .small hereda las propiedades de la clase .metric-value */
         .metric-value.small { font-size: 14px; }
-
+        /* Contenedor del QR de la batería activa (hereda las propiedades de .metric) */
         .metric-full { grid-column: 1 / -1; }
 
         /* Estado */
         .estado-badge {
-            display: inline-block;
+            display: inline-block;  /* Muestra los elementos como un contenedor de bloque de nivel en línea */
             font-family: var(--font-mono);
             font-size: 13px;
             font-weight: 700;
-            padding: 6px 14px;
+            padding: 6px 14px;  /* Padding inferior y superior de 6px, padding izquierdo y derecho de 14px */
             border-radius: 4px;
-            text-align: center;
-            width: 100%;
-            letter-spacing: 0.03em;
+            text-align: center;  /* Alineación del texto */
+            width: 100%;  /* Ancho del 100% relativo al contenedor padre */
+            letter-spacing: 0.03em;  /* Espaciado entre letras (lo aumentamos en 0.03 veces el tamaño de la fuente del navegador) */
         }
+        /* Lista de estados posibles del sistema (heredan las propiedades de .estado-badge) */
         .estado-reposo { background: #1f2937; color: var(--text-secondary); }
         .estado-cargando { background: #064e3b; color: var(--accent-green); }
         .estado-descargando { background: #78350f; color: var(--accent-yellow); }
         .estado-error { background: #7f1d1d; color: var(--accent-red); }
 
         /* --- CONFIG SECTION --- */
+        /* Contenedor de configuración */
         .config-group {
             margin-bottom: 10px;
         }
+        /* Etiqueta dentro del contenedor de configuración */
         .config-group label {
-            display: block;
+            display: block;  /* Muestra el elemento como un elemento en bloque */
             font-size: 11px;
             color: var(--text-muted);
             margin-bottom: 3px;
             font-weight: 500;
         }
-        .config-group select,
-        .config-group input {
-            width: 100%;
+        /* Lista desplegable dentro del contenedor de configuración y campo de texto para ingresar la capacidad nominal */
+        .config-group select, .config-group input {
+            width: 100%;  /* Ancho del 100% relativo al contenedor padre */
             background: var(--bg-card);
             border: 1px solid var(--border);
             color: var(--text-primary);
@@ -230,107 +273,153 @@
             font-size: 12px;
             padding: 6px 8px;
             border-radius: 6px;
-            outline: none;
-            transition: border-color var(--transition);
+            outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+            transition: border-color var(--transition);  /* Transición para el color del borde */
         }
-        .config-group select:focus,
-        .config-group input:focus { border-color: var(--accent-cyan); }
+        /* Modificamos el borde al hacer click en la lista despegable o en el campo de texto 
+        mediante la pseudo-clase :focus */
+        .config-group select:focus, .config-group input:focus { border-color: var(--accent-cyan); }
+        
+        /* Contenedor para seleccionar la capacidad nominal */
         .config-row {
-            display: flex;
+            display: flex;  /* Contenedor flex */
             gap: 6px;
-            align-items: flex-end;
+            align-items: flex-end;  /* Alinea los ítems al borde del contenedor */
         }
+        /* Hacemos que todos los elementos flexibles tengan la misma longitud, sin importar su contenido */
         .config-row .config-group { flex: 1; }
 
         /* --- BUTTONS --- */
+        /* Contenedor de los botones */
         .btn-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: grid;  /* Contenedor grid */
+            grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible en el contenedor */
             gap: 6px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--border);
+            margin-top: 12px;  /* Margen superior */
+            padding-top: 12px;  /* Padding superior */
+            border-top: 1px solid var(--border);  /* Borde superior sólido de 1 px */
         }
+        /* Botones para enviar órdenes al sistema (carga, descarga, parada y test auto) */
         .btn {
             font-family: var(--font-ui);
             font-size: 12px;
-            font-weight: 700;
-            padding: 10px 8px;
+            font-weight: 700;  /* Grosor de la fuente (negrita) */
+            padding: 10px 8px;  /* Padding inferior y superior de 10px, padding izquierdo y derecho de 8px */
             border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            transition: opacity var(--transition), transform 80ms ease;
-            letter-spacing: 0.02em;
+            border: none;  /* Sin borde */
+            cursor: pointer;  /* Cambia la forma del cursor al posicionarlo sobre el botón */
+            transition: opacity var(--transition), transform 80ms ease;  /* Transición en la opacidad y transformación de 80 ms que arranca lento, luego va rápido y termina lento (valor ease)*/
+            letter-spacing: 0.02em;  /* Aumentamos el espaciado entre letras 0.02 veces el tamaño de la fuente del navegador */
         }
-        .btn:active { transform: scale(0.97); }
+        /* ==== Estilos específicos de los botones ==== */
+        /* Cambiamos la escala de los botones al 97% (tanto el ancho como el alto) cuando se presiona el botón,
+        usando la pseudo-clase :active */
+        .btn:active { 
+            transform: scale(0.97); 
+        }
+        /* Cambiamos la opacidad (transparencia) al 85% al posicionar el cursor sobre el botón */
+        .btn:hover { opacity: 0.85; }
+        /* Botón de carga (hereda las propiedades de .btn) */
         .btn-charge { background: #16a34a; color: #fff; }
-        .btn-charge:hover { opacity: 0.85; }
+        /* Botón de descarga (hereda las propiedades de .btn) */
         .btn-discharge { background: #d97706; color: #000; }
-        .btn-discharge:hover { opacity: 0.85; }
-        .btn-auto { background: #2563eb; color: #fff; grid-column: 1 / -1; }
-        .btn-auto:hover { opacity: 0.85; }
-        .btn-stop { background: #dc2626; color: #fff; grid-column: 1 / -1; font-size: 14px; padding: 12px; }
-        .btn-stop:hover { opacity: 0.85; }
+        /* Botón para el modo auto (hereda las propiedades de .btn) */
+        .btn-auto { 
+            background: #2563eb; 
+            color: #fff; 
+            grid-column: 1 / -1;  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
+        }
+        /* Botón de parada (hereda las propiedades de .btn) */
+        .btn-stop { 
+            background: #dc2626; 
+            color: #fff; 
+            grid-column: 1 / -1;  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
+            font-size: 14px; 
+            padding: 12px; 
+        }
 
         /* --- CHART --- */
-        .chart-container {
+        /* .chart-container {
             position: relative;
             height: 380px;
-        }
+        }  */
 
         /* --- TABLES --- */
+        /* Contenedor de la tabla ubicada en la parte inferior */
         .table-wrap {
-            overflow-y: auto;
-            max-height: 280px;
+            overflow-y: auto; /* Permite agregar una barra de scrolleo cuando el contenido de la tabla desborda los bordes superior e inferior de la misma */
+            max-height: 280px;  /* Altura máxima de la tabla */
         }
+        /* Personalizamos la apariencia de la barra de scrolleo de las tablas */
         .table-wrap::-webkit-scrollbar { width: 4px; }
         .table-wrap::-webkit-scrollbar-track { background: transparent; }
         .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-        table { width: 100%; border-collapse: collapse; }
-        thead { position: sticky; top: 0; z-index: 1; }
+        /* Tabla propiamente dicha */
+        table { 
+            width: 100%;  /* La tabla ocupa el 100% de su contenedor */
+            border-collapse: collapse;  /* Permite que los bordes de cada celda de la tabla colapsen en uno solo */
+        }
+        /* Encabezado de la tabla */
+        thead { 
+            position: sticky;  /* El encabezado queda siempre en la parte superior al hacer scroll hacia abajo */
+            top: 0;  /* Hace que la posición sea relativa cuando el encabezado está dentro de los límites de la tabla, y fija cuando está fuera */
+            z-index: 1;  /* Permite que el encabezado se posicione por encima de la tabla al hacer scroll down */
+        }
+        /* Elementos del encabezado */
         thead th {
             font-size: 10px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            text-transform: uppercase;  /* Convierte la texto a mayúscula */
+            letter-spacing: 0.05em;  /* El espaciado entre letras será 0.05 veces el tamaño de la fuente */
             color: var(--text-muted);
-            text-align: left;
+            text-align: left;  /* Alineación izquierda del texto */
             padding: 8px;
             background: var(--bg-panel);
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);  /* Borde inferior */
         }
+        /* Celdas de la tabla */
         tbody td {
             font-size: 12px;
             padding: 8px;
             border-bottom: 1px solid var(--border);
             color: var(--text-secondary);
         }
-        tbody tr { transition: background var(--transition); }
+        /* Filas de la tabla */
+        tbody tr { 
+            transition: background var(--transition);  /* Transición de color de fondo */
+        }
+        /* Cambiamos el color de fondo de las filas al posicionar el cursor */
         tbody tr:hover { background: var(--bg-card); }
+        /* Permite modificar el cursor al posicionarlo sobre una fila */
         tbody tr.clickable { cursor: pointer; }
-
+        /* Celdas de las columnas TIPO, AH, RI y TMAX */
         .td-mono {
             font-family: var(--font-mono);
             font-size: 11px;
         }
+        /* Celdas de la columna BATERÍA */
         .td-qr {
             font-family: var(--font-mono);
             font-size: 11px;
             color: var(--accent-cyan);
         }
+        /* Celdas de la columna SOH */
         .td-soh { color: var(--accent-green); font-size: 10px; }
 
+        /* Encabezado de los paneles donde están las tablas */
         .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex;  /* Contenedor flex */
+            justify-content: space-between;  /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+            align-items: center;  /* Alineación de los ítems a lo largo del eje secundario (alineación central) */
             margin-bottom: 12px;
         }
+        /* Margen inferior 0 para el encabezado y el título de los paneles donde están las tablas */
         .panel-header .panel-title { margin-bottom: 0; }
+        /* Contenedor que agrupa los botones para realizar acciones sobre la tabla */
         .panel-actions { display: flex; gap: 6px; align-items: center; }
 
         /* Filter select */
+        /* Lista desplegable para filtrar las baterías en la tabla */
         .filter-select {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -338,90 +427,109 @@
             font-family: var(--font-ui);
             font-size: 11px;
             padding: 4px 6px;
-            border-radius: 4px;
-            outline: none;
+            border-radius: 4px;  /* Borde redondeado */
+            outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
         }
 
         /* --- MODAL --- */
+        /* Pantallas que se muestran por encima de la pantalla principal al presionar ciertos botones ("Escanear" y "Ver") */
         .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
+            display: none;  /* Ocultamos la pantalla por defecto */
+            position: fixed;  /* Posición fija relativa al viewport (ventana gráfica) */
+            top: 0; left: 0; right: 0; bottom: 0;  /* Hacemos que los bordes de esta pantalla se encuentren pegados a los bordes del contenedor padre (body) */
+            background: rgba(0,0,0,0.7);  /* Color de fondo negro, con opacidad 0.7 */
             z-index: 100;
             align-items: center;
             justify-content: center;
         }
+        /* La pantalla pasa a ser un contenedor flex cuando se abre */
         .modal-overlay.open { display: flex; }
+        /* Ventana dentro de la pantalla que se muestra por encima de la pantalla principal */ 
         .modal {
             background: var(--bg-panel);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            width: 90%;
-            max-width: 720px;
-            max-height: 85vh;
-            overflow-y: auto;
+            width: 90%;  /* Ancho del 90% relativo al contenedor padre */
+            max-width: 720px;  /* Ancho máximo de 720px */
+            max-height: 85vh;  /* Altura máxima de 85% de la altura del viewport */
+            overflow-y: auto;  /* Permite agregar una barra de scrolleo cuando el contenido de la ventana sobrepasa los bordes superior e inferior de la misma */
             padding: 24px;
         }
+        /* Personalizamos la apariencia de la barra de scrolleo de las ventanas .modal */
         .modal::-webkit-scrollbar { width: 4px; }
         .modal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
+        /* Contenedor que agrupa el título y el botón de cerrar */
         .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex;  /* Contenedor flex */
+            justify-content: space-between;  /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+            align-items: center;  /* Alineación de los ítems a lo largo del eje secundario (alineación central) */
             margin-bottom: 20px;
         }
+        /* Título de la ventana */
         .modal-header h2 {
             font-size: 16px;
             font-weight: 700;
         }
+        /* Botón de cerrar */
         .modal-close {
-            background: none;
-            border: none;
+            background: none;  /* Sin propiedades de bondo */
+            border: none;  /* Sin bordes */
             color: var(--text-muted);
             font-size: 20px;
-            cursor: pointer;
+            cursor: pointer;  /* Cambia la forma del cursor al posicionarlo sobre el botón */
             padding: 4px;
-            line-height: 1;
+            line-height: 1;  /* Altura de un renglón (igual al tamaño de la fuente) */
         }
+        /* Cambiamos el color del botón al posicionar el cursor */
         .modal-close:hover { color: var(--text-primary); }
-
+        /* Contenedor que agrupa las tarjetas de la pantalla que se abre al presionar el botón "Ver" ubicado en la tabla de inventario */
         .modal-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            display: grid;  /* Contenedor grid */
+            grid-template-columns: repeat(3, 1fr);  /* Permite ubicar las tres tarjetas en una misma fila */
             gap: 10px;
             margin-bottom: 20px;
         }
+        /* Tarjetas que muestran valores de total de ciclos, último SOH y última RI */
         .modal-stat {
             background: var(--bg-card);
             border-radius: 6px;
             padding: 12px;
             text-align: center;
         }
+        /* Nombre de la variable en la tarjeta */
         .modal-stat .metric-label { margin-bottom: 4px; }
+        /* Valor de la variable de la tarjeta */
         .modal-stat .metric-value { font-size: 16px; }
 
-        .modal-chart { height: 200px; margin-bottom: 20px; }
-
-        .modal-table-wrap { max-height: 200px; overflow-y: auto; }
+        /* Contenedor del gráfico */
+        .modal-chart { 
+            height: 200px;  /* Altura fija de 200px */
+            margin-bottom: 20px;  /* Margen inferior */
+        }
+        /* Contenedor de la tabla que se encuentra por debajo del gráfico */
+        .modal-table-wrap { 
+            max-height: 200px;  /* Altura máxima de 200px */
+            overflow-y: auto;  /* Permite agregar una barra de scrolleo cuando el contenido de la tabla sobrepasa los bordes superior e inferior de la misma */
+        }
+        /* Personalizamos la apariencia de la barra de scrolleo de la tabla */
         .modal-table-wrap::-webkit-scrollbar { width: 4px; }
         .modal-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
         /* Temp bar */
-        .temp-section {
+        /*.temp-section {
             background: var(--bg-card);
             border-radius: 6px;
             padding: 10px;
             margin-bottom: 8px;
-        }
-        .temp-row {
+        } */
+        /* .temp-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .temp-row .metric-label { margin: 0; }
-        
+        .temp-row .metric-label { margin: 0; } */
+        /* Regla que permite controlar los pasos en una secuencia de animación. En este caso, la usamos para que la ruedita
+        que indica que se está estableciendo la conexión con la ESP-CAM gire */
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -433,176 +541,209 @@
 
     <!-- HEADER -->
     <header class="header" id="app-header">
-        <h1>Controlador de Baterías</h1>
-        <div class="header-right">
-            <div class="qr-input-group">
+        <h1>Controlador de Baterías</h1> <!-- Título del header-->
+        <div class="header-right"> <!-- Contenedor para agrupar los elementos que se encuentran en la parte derecha del header -->
+            <div class="qr-input-group"> <!-- Agrupa las opciones relacionadas con el QR -->
                 <label for="input-qr">Batería QR</label>
+                <!-- Campo de texto para ingresar manualmente el QR -->
                 <input type="text" id="input-qr" placeholder="Código batería..." spellcheck="false">
+                <!-- Botones "Asignar" y "Escanear" -->
                 <button class="btn-sm" id="btn-asignar-qr" onclick="asignarQR()">Asignar</button>
                 <button class="btn-sm" id="btn-escanear-qr" onclick="escanearConCamara()" style="background: var(--bg-hover); border-color: var(--accent-cyan); color: var(--accent-cyan);">📷 Escanear</button>
             </div>
-            <div class="conn-indicator">
-                <div class="conn-dot" id="conn-dot"></div>
-                <span id="conn-text">Conectado</span>
+            <div class="conn-indicator"> <!-- Contenedor que agrupa los elementos relacionados con el estado de la conexión -->
+                <div class="conn-dot" id="conn-dot"></div> <!-- Punto ubicado a la izquierda del texto -->
+                <span id="conn-text">Conectado</span> <!-- Texto que indica el estado de la conexión -->
             </div>
         </div>
     </header>
 
     <!-- MAIN: Control + Chart -->
-    <div class="main-grid">
+    <div class="main-grid"> <!-- Contenedor que agrupa el panel lateral y el panel gráfico -->
 
         <!-- LEFT: Panel de Control -->
         <div class="panel" id="panel-control">
-            <div class="panel-title">Telemetría</div>
+            <div class="panel-title">Telemetría</div> <!-- Título (podría ser una etiqueta <h2>)-->
 
             <!-- Estado -->
-            <div style="margin-bottom: 10px;">
+            <div style="margin-bottom: 10px;"> <!-- Contenedor del estado del sistema -->
                 <span class="estado-badge estado-reposo" id="badge-estado">REPOSO</span>
             </div>
 
             <!-- QR actual -->
-            <div class="metric metric-full" style="margin-bottom: 10px;">
+            <div class="metric metric-full" style="margin-bottom: 10px;"> <!-- Contenedor del QR de la batería activa -->
                 <div class="metric-label">Batería activa</div>
                 <div class="metric-value small" id="val-qr" style="color: var(--accent-yellow);">NINGUNA</div>
             </div>
 
             <!-- V, I -->
-            <div class="metrics-grid">
-                <div class="metric">
-                    <div class="metric-label">Tensión</div>
-                    <div class="metric-value" id="val-v" style="color: var(--accent-cyan);">0.00<span style="font-size:12px;opacity:0.6;"> V</span></div>
+            <div class="metrics-grid"> <!-- Contenedor que agrupa los valores de tensión, corriente, capacidad y resistencia interna -->
+                <!-- Cada variable tiene asociada un contenedor que incluye una etiqueta y su valor -->
+                <div class="metric"> <!-- Tensión -->
+                    <div class="metric-label">Tensión</div> <!-- Etiqueta (parte superior)-->
+                    <div class="metric-value" id="val-v" style="color: var(--accent-cyan);">0.00<span style="font-size:12px;opacity:0.6;"> V</span></div> <!-- Valor (parte inferior)-->
                 </div>
-                <div class="metric">
+                <div class="metric"> <!-- Corriente -->
                     <div class="metric-label">Corriente</div>
                     <div class="metric-value" id="val-i" style="color: var(--accent-violet);">0<span style="font-size:12px;opacity:0.6;"> mA</span></div>
                 </div>
-                <div class="metric">
+                <div class="metric"> <!-- Capacidad -->
                     <div class="metric-label">Capacidad</div>
                     <div class="metric-value small" id="val-ah" style="color: var(--accent-green);">0.000<span style="font-size:11px;opacity:0.6;"> Ah</span></div>
                 </div>
-                <div class="metric">
+                <div class="metric"> <!-- Resistencia interna -->
                     <div class="metric-label">R. Interna</div>
                     <div class="metric-value small" id="val-ri" style="color: var(--accent-orange);">0<span style="font-size:11px;opacity:0.6;"> mΩ</span></div>
                 </div>
             </div>
 
             <!-- Temperatura -->
-            <div class="temp-section">
+            <div class="temp-section"> <!-- Contenedor para agrupar la temperatura -->
                 <div class="temp-row">
-                    <span class="metric-label">Temperatura</span>
-                    <span class="td-mono" style="color: var(--accent-red);">
+                    <span class="metric-label">Temperatura</span> <!-- Etiqueta (parte izquierda)-->
+                    <span class="td-mono" style="color: var(--accent-red);"> <!-- Valor actual y valor máximo de temperatura-->
                         <span id="val-t">0.0</span>°C / <span id="val-tmax">0.0</span>°C
                     </span>
                 </div>
             </div>
 
             <!-- Config -->
-            <div class="config-group">
+            <div class="config-group"> <!-- Contenedor para seleccionar el perfil de la batería-->
                 <label>Perfil de batería</label>
+                <!-- Lista desplegable para seleccionar el perfil de la batería -->
                 <select id="select-perfil" onchange="cambiarPerfil(this.value)">
-                    <option value="">Seleccionar...</option>
+                    <!-- <option value="">Seleccionar...</option> -->
                     <option value="LI-ION-2S">Li-Ion 2S (8.4V)</option>
                     <option value="LI-ION-3S">Li-Ion 3S (12.6V)</option>
                     <option value="PB-12V">Plomo 12V (14.4V)</option>
-                    <option value="NiMH-7.2V" selected>NiMH 7.2V</option>
+                    <option value="NiMH-7.2V" selected>NiMH 7.2V</option> <!-- Valor por defecto -->
                     <option value="PERSONALIZADO">Personalizado (Manual)</option>
                 </select>
             </div>
-            <div class="config-row">
-                <div class="config-group">
+            <div class="config-row"> <!-- Contenedor para seleccionar la capacidad nominal -->
+                <div class="config-group"> <!-- Contenedor del campo de texto (parte izquierda)-->
                     <label>Cap. nominal (Ah)</label>
+                    <!-- Campo de texto para ingresar la capacidad -->
                     <input type="number" id="input-cap" step="0.1" value="6.5">
                 </div>
                 <div style="padding-bottom:1px;">
+                    <!-- Botón OK (parte derecha) -->
                     <button class="btn-sm" onclick="configurarNominal()">OK</button>
                 </div>
             </div>
 
             <!-- Botones -->
             <div class="btn-grid">
+                <!-- Botón para iniciar la carga -->
                 <button class="btn btn-charge" id="btn-cargar" onclick="enviarComando('START_C')">CARGAR</button>
+                <!-- Botón para iniciar la descarga -->
                 <button class="btn btn-discharge" id="btn-descargar" onclick="enviarComando('START_D')">DESCARGAR</button>
+                <!-- Botón para iniciar un ciclo completo -->
+                <!-- La idea es que más adelante se puedan seleccionar el número de ciclos -->
                 <button class="btn btn-auto" id="btn-auto" onclick="enviarComando('START_AUTO')">TEST AUTO (CICLO COMPLETO)</button>
+                <!-- Botón para detener el sistema -->
                 <button class="btn btn-stop" id="btn-parar" onclick="enviarComando('STOP_ALL')">PARAR TODO</button>
             </div>
         </div>
 
-        <!-- RIGHT: Charts -->
+        <!-- RIGHT: Charts --> <!-- Panel de gráficos -->
         <div class="panel" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="panel-header" style="margin-bottom: 0;">
-                <span class="panel-title">Monitoreo Gráfico</span>
-                <div class="panel-actions" style="gap: 10px;">
+            <div class="panel-header" style="margin-bottom: 0;"> <!-- Encabezado del panel -->
+                <span class="panel-title">Monitoreo Gráfico</span> <!-- Título del panel (alineación izquierda)-->
+                <div class="panel-actions" style="gap: 10px;"> <!-- Menú de opciones del panel (alineación derecha) -->
+                    <!-- Botón Controles (abre un panel para ajustar la escala de los gráficos) -->
                     <button class="btn-sm" id="btn-chart-ctrls-toggle" onclick="toggleChartCtrls()">⚙️ Controles</button>
+                    <!-- Botón Default (reestablece la configuración por defecto)-->
                     <button class="btn-sm" onclick="restablecerDefaults()">Default</button>
+                    <!-- Botón Exportar -->
                     <button class="btn-sm" onclick="toggleExportMenu()">💾 Exportar</button>
                 </div>
             </div>
 
             <!-- Configuration panel for scales & timebase (collapsible) -->
+            <!-- Panel de configuración para base de tiempos y escalas (por defecto está oculto, se abre al presionar
+             el botón Controles)-->
             <div id="chart-controls-panel" style="display: none; background: var(--bg-card); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); gap: 12px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 120px;">
+                <div style="flex: 1; min-width: 120px;"> <!-- Base de tiempo -->
                     <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Base de Tiempo (Puntos)</label>
+                    <!-- Lista desplegable para seleccionar la base de tiempos como número de puntos-->
                     <select id="select-timebase" onchange="actualizarTimebase(this.value)" style="width: 100%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 12px; outline: none;">
                         <option value="50">50 puntos (~1.5 min)</option>
-                        <option value="100" selected>100 puntos (~3 min)</option>
+                        <option value="100" selected>100 puntos (~3 min)</option> <!-- Valor por defecto-->
                         <option value="200">200 puntos (~6 min)</option>
                         <option value="500">500 puntos (~15 min)</option>
                         <option value="1000">1000 puntos (~30 min)</option>
                     </select>
                 </div>
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 140px;"> <!-- Escala de tensión -->
                     <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Voltaje (V)</label>
+                    <!-- Contenedor para seleccionar los límites de tensión de la gráfica -->
                     <div style="display: flex; gap: 4px; align-items: center;">
+                        <!-- Límite inferior-->
                         <input type="number" id="scale-v-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                         <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <!-- Límite superior -->
                         <input type="number" id="scale-v-max" value="16" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                     </div>
                 </div>
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 140px;"> <!-- Escala de corriente -->
                     <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Corriente (mA)</label>
+                    <!-- Contenedor para seleccionar los límites de corriente de la gráfica -->
                     <div style="display: flex; gap: 4px; align-items: center;">
+                        <!-- Límite inferior-->
                         <input type="number" id="scale-i-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                         <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <!-- Límite superior -->
                         <input type="number" id="scale-i-max" value="2000" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                     </div>
                 </div>
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 140px;"> <!-- Escala de temperatura -->
                     <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Escala Temp (°C)</label>
                     <div style="display: flex; gap: 4px; align-items: center;">
+                        <!-- Límite inferior -->
                         <input type="number" id="scale-t-min" value="0" placeholder="Min" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                         <span style="font-size: 11px; color: var(--text-muted);">a</span>
+                        <!-- Límite superior -->
                         <input type="number" id="scale-t-max" value="60" placeholder="Max" style="width: 50px; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary); padding: 2px 4px; border-radius: 4px; font-size: 11px; outline: none;" onchange="actualizarEscalas()">
                     </div>
                 </div>
             </div>
 
             <!-- Export Menu (collapsible) -->
+            <!-- Menú de exportación (por defecto está oculto, se abre al presionar el botón Exportar)-->
             <div id="export-menu-panel" style="display: none; background: var(--bg-card); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); gap: 10px; flex-direction: column;">
+                <!-- Exportación de gráficos en formato PNG -->
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Exportar Imagen del Gráfico (PNG)</div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn-sm" onclick="exportarImagen('voltaje')">Voltaje</button>
-                    <button class="btn-sm" onclick="exportarImagen('corriente')">Corriente</button>
-                    <button class="btn-sm" onclick="exportarImagen('temperatura')">Temperatura</button>
-                    <button class="btn-sm" onclick="exportarImagen('todos')">Todos juntos</button>
+                    <!-- Botones para exportar las variables -->
+                    <button class="btn-sm" onclick="exportarImagen('voltaje')">Voltaje</button> <!-- Tensión -->
+                    <button class="btn-sm" onclick="exportarImagen('corriente')">Corriente</button> <!-- Corriente -->
+                    <button class="btn-sm" onclick="exportarImagen('temperatura')">Temperatura</button> <!-- Temperatura -->
+                    <button class="btn-sm" onclick="exportarImagen('todos')">Todos juntos</button> <!-- Exportar todo junto -->
                 </div>
                 <div style="height: 1px; background: var(--border); margin: 4px 0;"></div>
+                <!-- Exportación de datos a un archivo CSV -->
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Exportar Datos de Sesión Activa (CSV)</div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button class="btn-sm" onclick="exportarDatosSesion('voltaje')">Datos Voltaje</button>
-                    <button class="btn-sm" onclick="exportarDatosSesion('corriente')">Datos Corriente</button>
-                    <button class="btn-sm" onclick="exportarDatosSesion('temperatura')">Datos Temp</button>
-                    <button class="btn-sm" onclick="exportarDatosSesion('todos')">Todos los Datos</button>
+                    <!-- Botones para exportar las variables -->
+                    <button class="btn-sm" onclick="exportarDatosSesion('voltaje')">Datos Voltaje</button> <!-- Tensión -->
+                    <button class="btn-sm" onclick="exportarDatosSesion('corriente')">Datos Corriente</button> <!-- Corriente -->
+                    <button class="btn-sm" onclick="exportarDatosSesion('temperatura')">Datos Temp</button> <!-- Temperatura -->
+                    <button class="btn-sm" onclick="exportarDatosSesion('todos')">Todos los Datos</button> <!-- Exportar todos los datos -->
                 </div>
             </div>
 
             <!-- Charts Column -->
+            <!-- Panel de gráficos propiamente dicho -->
             <div style="display: flex; flex-direction: column; gap: 14px;">
                 <!-- Card Voltaje -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <!-- Contenedor que agrupa la etiqueta y el valor -->
                     <div style="display: flex; justify-content: space-between; align-items: baseline;">
                         <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Voltaje</span>
                         <span id="chart-val-v" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-cyan);">0.00 V</span>
                     </div>
+                    <!-- Gráfico de tensión -->
                     <div style="height: 95px; position: relative;">
                         <canvas id="chartVoltaje"></canvas>
                     </div>
@@ -610,10 +751,12 @@
 
                 <!-- Card Corriente -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <!-- Contenedor que agrupa la etiqueta y el valor -->
                     <div style="display: flex; justify-content: space-between; align-items: baseline;">
                         <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Corriente</span>
                         <span id="chart-val-i" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-violet);">0 mA</span>
                     </div>
+                    <!-- Gráfico de corriente -->
                     <div style="height: 95px; position: relative;">
                         <canvas id="chartCorriente"></canvas>
                     </div>
@@ -621,10 +764,12 @@
 
                 <!-- Card Temperatura -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+                    <!-- Contenedor que agrupa la etiqueta y el valor -->
                     <div style="display: flex; justify-content: space-between; align-items: baseline;">
                         <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">Temperatura</span>
                         <span id="chart-val-t" style="font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--accent-red);">0.0 °C</span>
                     </div>
+                    <!-- Gráfico de temperatura -->
                     <div style="height: 95px; position: relative;">
                         <canvas id="chartTemperatura"></canvas>
                     </div>
@@ -634,44 +779,48 @@
     </div>
 
     <!-- BOTTOM: Inventario + Historial -->
+    <!-- Sección inferior de la página donde se muestra el inventario de baterías junto al historial de ciclos -->
     <div class="bottom-grid">
-
         <!-- Inventario -->
         <div class="panel">
-            <div class="panel-header">
-                <span class="panel-title">Inventario de baterías</span>
+            <div class="panel-header"> <!-- Encabezado del panel -->
+                <span class="panel-title">Inventario de baterías</span> <!-- Título -->
                 <div class="panel-actions">
+                    <!-- Botón para refrescar la tabla (hace una consulta a la base de datos)-->
                     <button class="btn-sm" onclick="cargarInventario()">Refrescar</button>
                 </div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap"> <!-- Contenedor de la tabla-->
                 <table>
-                    <thead><tr>
+                    <thead><tr> <!-- Encabezados de la tabla -->
                         <th>QR</th>
                         <th>Fecha registro</th>
                         <th>Ciclos</th>
                         <th></th>
                     </tr></thead>
-                    <tbody id="tbody-inventario"></tbody>
+                    <tbody id="tbody-inventario"></tbody> <!-- Cuerpo (contenido) de la tabla -->
                 </table>
             </div>
         </div>
 
         <!-- Historial -->
         <div class="panel">
-            <div class="panel-header">
-                <span class="panel-title">Historial de ciclos</span>
-                <div class="panel-actions">
+            <div class="panel-header"> <!-- Encabezado del panel -->
+                <span class="panel-title">Historial de ciclos</span> <!-- Título (alineación izquierda)-->
+                <div class="panel-actions"> <!-- Panel de acciones (alineación derecha)-->
+                    <!-- Lista desplegable para seleccionar una batería -->
                     <select class="filter-select" id="filtro-qr" onchange="cargarHistorial()">
                         <option value="">Todas</option>
                     </select>
+                    <!-- Link para exportar los datos en formato CSV (hace una consulta a la API)-->
                     <a href="/exportar" class="btn-sm" style="text-decoration:none;">CSV</a>
+                    <!-- Botón para refrescar la tabla -->
                     <button class="btn-sm" onclick="cargarHistorial()">Refrescar</button>
                 </div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap"> <!-- Contenedor de la tabla -->
                 <table>
-                    <thead><tr>
+                    <thead><tr> <!-- Encabezados de la tabla -->
                         <th>Batería</th>
                         <th>Tipo</th>
                         <th>Ah</th>
@@ -679,7 +828,7 @@
                         <th>RI</th>
                         <th>T Max</th>
                     </tr></thead>
-                    <tbody id="tbody-historial"></tbody>
+                    <tbody id="tbody-historial"></tbody>  <!-- Cuerpo (contenido) de la tabla -->
                 </table>
             </div>
         </div>
@@ -687,19 +836,20 @@
 </div>
 
 <!-- MODAL: Detalle Batería -->
+<!-- Pantalla que se muestra al hacer click en el botón "Ver" ubicado en la parte derecha de la tabla de inventario -->
 <div class="modal-overlay" id="modal-detalle">
     <div class="modal">
-        <div class="modal-header">
-            <h2 id="modal-titulo">Batería: ---</h2>
-            <button class="modal-close" onclick="cerrarModal()">&times;</button>
+        <div class="modal-header"> <!-- Contenedor que agrupa el título y el botón de cerrar -->
+            <h2 id="modal-titulo">Batería: ---</h2>  <!-- Título -->
+            <button class="modal-close" onclick="cerrarModal()">&times;</button> <!-- Ícono de cerrar -->
         </div>
-        <div class="modal-stats" id="modal-stats"></div>
-        <div class="panel-title">Tendencia SoH</div>
-        <div class="modal-chart">
-            <canvas id="chartTendencia"></canvas>
+        <div class="modal-stats" id="modal-stats"></div> <!-- Contenedor que agrupa las tarjetas Total ciclos, último SoH y última RI -->
+        <div class="panel-title">Tendencia SoH</div>  <!-- Título del gráfico de SoH -->
+        <div class="modal-chart">  <!-- Contenedor para el gráfico -->
+            <canvas id="chartTendencia"></canvas>  <!-- Gráfico de SoH -->
         </div>
-        <div class="panel-title">Ciclos</div>
-        <div class="modal-table-wrap">
+        <div class="panel-title">Ciclos</div>  <!-- Título del historial de ciclos -->
+        <div class="modal-table-wrap">  <!-- Contenedor para la tabla que muestra el historial de ciclos -->
             <table>
                 <thead><tr>
                     <th>Tipo</th>
@@ -717,19 +867,25 @@
 </div>
 
 <!-- MODAL: Cámara -->
-<div class="modal-overlay" id="modal-camara">
-    <div class="modal" style="max-width: 480px; text-align: center;">
-        <div class="modal-header">
-            <h2>Escanear Código QR</h2>
-            <button class="modal-close" onclick="cerrarModalCamara()">&times;</button>
+<!-- Pantalla que se abre al presionar el botón "Escanear" ubicado en la parte derecha del header -->
+<!-- Esta pantalla se va a eliminar -->
+<div class="modal-overlay" id="modal-camara">  <!-- Pantalla completa -->
+    <div class="modal" style="max-width: 480px; text-align: center;"> <!-- Ventana que se solapa con la pantalla principal -->
+        <div class="modal-header">  <!-- Contenedor que agrupa el título y el botón de cerrar -->
+            <h2>Escanear Código QR</h2>  <!-- Título -->
+            <button class="modal-close" onclick="cerrarModalCamara()">&times;</button>  <!-- Botón de cerrar -->
         </div>
         <div style="position: relative; width: 100%; height: 320px; background: #000; border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);">
+            <!-- Imagen de la cámara -->
             <img id="camara-feed" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none; transform: rotate(90deg);" />
+            <!-- Contenedor que agrupa la ruedita y el texto de espera -->
             <div id="camara-cargando" style="display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text-secondary);">
+                <!-- Ruedita que gira continuamente a la espera de la conexión con la cámara -->
                 <div style="width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></div>
                 <span style="font-size: 13px;">Conectando con ESP32-CAM...</span>
             </div>
         </div>
+        <!-- Texto indicativo -->
         <div style="margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
             Apunta la cámara al código QR de la batería. Se cerrará automáticamente al decodificar.
         </div>
@@ -737,124 +893,148 @@
 </div>
 
 <script>
-const API = window.location.origin;
-let maxPoints = 100;
-let chartTendencia = null;
-let connOk = true;
+const API = window.location.origin;  // URL base de la página web
+let maxPoints = 100;  // Número máximo de puntos de los gráficos en el panel derecho
+let chartTendencia = null;  // Objeto que almacena el gráfico de tendencia de SoH
+let connOk = true;  // Bandera que indica si hay conexión con el ESP32
 
 // --- CHART SETUP ---
+// ====== CONFIGURACIÓN DE LOS GRÁFICOS ======
+/* Opciones comunes a todos los gráficos */
 const optCommon = {
-    responsive: true,
+    responsive: true,  // Diseño responsive
     maintainAspectRatio: false,
-    animation: false,
+    animation: false,  // Sin animaciones
     interaction: { mode: 'index', intersect: false },
     plugins: {
+        // Leyenda
         legend: {
             labels: { color: '#9ca3af', font: { family: 'Inter', size: 10 }, boxWidth: 10, padding: 4 },
-            position: 'top'
+            position: 'top'  // Posición de la leyenda
         }
     },
     scales: {
+        // Escala horizontal
         x: {
             ticks: { color: '#6b7280', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 10 },
-            grid: { color: '#1f2233' }
+            grid: { color: '#1f2233' }  // Color de la grilla
         },
+        // Escala vertical
         y: {
-            type: 'linear',
+            type: 'linear',  // Escala lineal
             ticks: { color: '#9ca3af', font: { size: 9 } },
-            grid: { color: '#1f2233' }
+            grid: { color: '#1f2233' }  // Color de la grilla
         }
     }
 };
-
+// Obtenemos el elemento HTML correspondiente al gráfico de tensión
 const ctxV = document.getElementById('chartVoltaje').getContext('2d');
+// Creamos el gráfico de tensión
 const chartV = new Chart(ctxV, {
-    type: 'line',
+    type: 'line',  // Tipo de gráfico (línea)
     data: {
-        labels: [],
+        labels: [],  // Etiquetas del eje horizontal
         datasets: [{
-            label: 'Voltaje (V)',
-            borderColor: '#22d3ee',
-            backgroundColor: 'rgba(34,211,238,0.05)',
-            data: [],
-            borderWidth: 1.5,
-            tension: 0.3,
+            label: 'Voltaje (V)',  // Etiqueta de referencia
+            borderColor: '#22d3ee',  // Color de borde
+            backgroundColor: 'rgba(34,211,238,0.05)',  // Color de fondo
+            data: [],  // Datos a insertar en el gráfico
+            borderWidth: 1.5,  // Ancho de borde
+            tension: 0.3, 
             fill: true,
-            pointRadius: 0
+            pointRadius: 0  // Radio de los puntos
         }]
     },
     options: {
-        ...optCommon,
+        ...optCommon,  // Opciones comunes
         scales: {
-            ...optCommon.scales,
+            ...optCommon.scales,  // Escalas comunes
+            // Establecemos una escala vertical de 0 a 16 V
             y: { ...optCommon.scales.y, min: 0, max: 16 }
         }
     }
 });
 
+// Obtenemos el elemento HTML correspondiente al gráfico de corriente
 const ctxI = document.getElementById('chartCorriente').getContext('2d');
+// Creamos el gráfico de corriente
 const chartI = new Chart(ctxI, {
-    type: 'line',
+    type: 'line',  // Tipo de gráfico (línea)
     data: {
-        labels: [],
+        labels: [],  // Etiquetas de eje horizontal
         datasets: [{
-            label: 'Corriente (mA)',
-            borderColor: '#a78bfa',
-            backgroundColor: 'rgba(167,139,250,0.05)',
-            data: [],
-            borderWidth: 1.5,
+            label: 'Corriente (mA)',  // Etiqueta de la leyenda
+            borderColor: '#a78bfa',  // Color de borde
+            backgroundColor: 'rgba(167,139,250,0.05)',  // Color de fondo
+            data: [],  // Datos a insertar en el gráfico
+            borderWidth: 1.5,  // Ancho de borde
             tension: 0.3,
             fill: true,
-            pointRadius: 0
+            pointRadius: 0  // Radio de los puntos
         }]
     },
     options: {
-        ...optCommon,
+        ...optCommon,  // Opciones comunes
         scales: {
-            ...optCommon.scales,
+            ...optCommon.scales,  // Escalas comunes
+            // Establecemos una escala vertical de 0 a 2000 mA
             y: { ...optCommon.scales.y, min: 0, max: 2000 }
         }
     }
 });
 
+// Obtenemos el elemento HTML correspondiente al gráfico de temperatura
 const ctxT = document.getElementById('chartTemperatura').getContext('2d');
+// Creamos el gráfico de temperatura
 const chartT = new Chart(ctxT, {
-    type: 'line',
+    type: 'line',  // Tipo de gráfico (línea)
     data: {
-        labels: [],
+        labels: [],  // Etiquetas de eje horizontal
         datasets: [{
-            label: 'Temperatura (°C)',
-            borderColor: '#f87171',
-            backgroundColor: 'rgba(248,113,113,0.05)',
-            data: [],
-            borderWidth: 1.5,
+            label: 'Temperatura (°C)',  // Etiqueta de la leyenda
+            borderColor: '#f87171',  // Color de borde
+            backgroundColor: 'rgba(248,113,113,0.05)',  // Color de fondo
+            data: [],  // Datos a insertar en el gráfico
+            borderWidth: 1.5,  // Ancho de borde
             tension: 0.3,
             fill: true,
-            pointRadius: 0
+            pointRadius: 0  // Radio de los puntos
         }]
     },
     options: {
-        ...optCommon,
+        ...optCommon,  // Opciones comunes
         scales: {
-            ...optCommon.scales,
+            ...optCommon.scales,  // Escalas comunes
+            // Establecemos una escala vertical de 0 a 60°C
             y: { ...optCommon.scales.y, min: 0, max: 60 }
         }
     }
 });
 
 // --- CHART CONTROLS FUNCTIONS ---
+// ===== FUNCIONES PARA EL CONTROL DE LOS GRÁFICOS ======
+// Función callback que se ejecuta cuando se presiona el botón "Controles"
 function toggleChartCtrls() {
+    // Obtenemos el elemento correspondiente al panel de opciones del gráfico (que está oculto por defecto)
     const p = document.getElementById('chart-controls-panel');
+    // Mostramos el panel de opciones como un contenedor flex
     p.style.display = p.style.display === 'none' ? 'flex' : 'none';
 }
 
+// Callback que se ejecuta cuando se presiona el botón "Exportar"
 function toggleExportMenu() {
+    // Obtenemos el elemento correspondiente al panel de exportación (que está oculto por defecto)
     const p = document.getElementById('export-menu-panel');
+    // Mostramos el panel de exportación como un contenedor flex
     p.style.display = p.style.display === 'none' ? 'flex' : 'none';
 }
 
+// Función callback que se ejecuta al cambiar la opción de la lista desplegable para seleccionar la base de tiempos de los gráficos
 function actualizarTimebase(val) {
+    // Obtenemos el número máximo de puntos a partir de la opción seleccionada
     maxPoints = parseInt(val) || 100;
+    // Construimos un array formado por los objetos que representan los tres gráficos, y recorremos ese
+    // array para modificar el número de puntos
     [chartV, chartI, chartT].forEach(c => {
         while (c.data.labels.length > maxPoints) {
             c.data.labels.shift();
@@ -864,158 +1044,235 @@ function actualizarTimebase(val) {
     });
 }
 
+// Callback que se ejecuta cuando cambian los valores de los campos de texto del panel de control del gráfico,
+// el cual permite cambiar las escalas de los gráficos
 function actualizarEscalas() {
+    // Obtenemos los valores de los campos de texto y los convertimos a flotante
     const vMin = parseFloat(document.getElementById('scale-v-min').value);
     const vMax = parseFloat(document.getElementById('scale-v-max').value);
     const iMin = parseFloat(document.getElementById('scale-i-min').value);
     const iMax = parseFloat(document.getElementById('scale-i-max').value);
     const tMin = parseFloat(document.getElementById('scale-t-min').value);
     const tMax = parseFloat(document.getElementById('scale-t-max').value);
-
-    if (!isNaN(vMin)) chartV.options.scales.y.min = vMin;
-    if (!isNaN(vMax)) chartV.options.scales.y.max = vMax;
+    // Actualizamos las escalas en el gráfico de tensión
+    if (!isNaN(vMin)) chartV.options.scales.y.min = vMin;  // Límite inferior
+    if (!isNaN(vMax)) chartV.options.scales.y.max = vMax;  // Límite superior
     chartV.update();
-
+    // Actualizamos las escalas en el gráfico de corriente
     if (!isNaN(iMin)) chartI.options.scales.y.min = iMin;
     if (!isNaN(iMax)) chartI.options.scales.y.max = iMax;
     chartI.update();
-
+    // Actualizamos las escalas en el gráfico de temperatura
     if (!isNaN(tMin)) chartT.options.scales.y.min = tMin;
     if (!isNaN(tMax)) chartT.options.scales.y.max = tMax;
     chartT.update();
 }
 
+// Callback que se ejecuta al presionar el botón "Default", el cual permite reestablecer las escalas por defecto
 function restablecerDefaults() {
+    // Cambiamos el valor de la base de tiempos a 100
     document.getElementById('select-timebase').value = "100";
     maxPoints = 100;
-
-    document.getElementById('scale-v-min').value = 0;
-    document.getElementById('scale-v-max').value = 16;
-    document.getElementById('scale-i-min').value = 0;
-    document.getElementById('scale-i-max').value = 2000;
-    document.getElementById('scale-t-min').value = 0;
-    document.getElementById('scale-t-max').value = 60;
-
+    // Cambiamos las escalas de los gráficos en el panel de control del gráfico
+    // Gráfico de tensión
+    document.getElementById('scale-v-min').value = 0;  // Límite inferior
+    document.getElementById('scale-v-max').value = 16;  // Límite superior
+    // Gráfico de corriente
+    document.getElementById('scale-i-min').value = 0;  // Límite inferior
+    document.getElementById('scale-i-max').value = 2000;  // Límite superior
+    // Gráfico de temperatura
+    document.getElementById('scale-t-min').value = 0;  // Límite inferior
+    document.getElementById('scale-t-max').value = 60;  // Límite superior
+    // Cambiamos las escalas en el gráfico
     actualizarEscalas();
+    // Cambiamos la base de tiempos en el gráfico
     actualizarTimebase(100);
 }
 
+// Callback que se ejecuta cuando se presionan los botones del panel de exportación (oculto por defecto)
+// para exportar los gráficos de cada variable en formato imagen (PNG)
 function exportarImagen(param) {
+    // Función para descargar una imagen
     const downloadImg = (chartObj, filename) => {
+        // Creamos un enlace (etiqueta <a>)
         const link = document.createElement('a');
+        // Nombre del archivo que se desea descargar
         link.download = filename;
+        // Convertimos el gráfico en imagen codificada en base 64 y cambiamos el URL del enlace
         link.href = chartObj.toBase64Image();
+        // Hacemos click en el enlace para descargar la imagen
         link.click();
     };
-
-    if (param === 'voltaje') {
-        downloadImg(chartV, 'grafico_voltaje.png');
+    // Descargamos el gráfico en formato imagen según el botón presionado
+    if (param === 'voltaje') {  
+        downloadImg(chartV, 'grafico_voltaje.png');  // Gráfico de tensión
     } else if (param === 'corriente') {
-        downloadImg(chartI, 'grafico_corriente.png');
+        downloadImg(chartI, 'grafico_corriente.png');  // Gráfico de corriente
     } else if (param === 'temperatura') {
-        downloadImg(chartT, 'grafico_temperatura.png');
+        downloadImg(chartT, 'grafico_temperatura.png');  // Gráfico de temperatura
     } else if (param === 'todos') {
+        // Descargamos todos los gráficos de a uno
         downloadImg(chartV, 'grafico_voltaje.png');
+        // Descargamos el gráfico de corriente después de 200 ms
         setTimeout(() => downloadImg(chartI, 'grafico_corriente.png'), 200);
+        // Descargamos el gráfico de temperatura después de 400 ms
         setTimeout(() => downloadImg(chartT, 'grafico_temperatura.png'), 400);
     }
 }
 
+// Callback que se ejecuta cuando se presionan los botones del panel de exportación para exportar los datos
+// de cada variable en formato CSV
 function exportarDatosSesion(param) {
+    // Etiquetas del eje horizontal del gráfico de tensión
     const labels = chartV.data.labels;
-    const voltajes = chartV.data.datasets[0].data;
-    const corrientes = chartI.data.datasets[0].data;
-    const temperaturas = chartT.data.datasets[0].data;
-
+    // Datos de los tres gráficos
+    const voltajes = chartV.data.datasets[0].data;  // Tensión
+    const corrientes = chartI.data.datasets[0].data;  // Corriente
+    const temperaturas = chartT.data.datasets[0].data;  // Temperatura
+    // URI que embebe contenido CSV directamente en una URL, especificando que los datos están en codificación UTF-8
     let csvContent = "data:text/csv;charset=utf-8,";
-    
-    if (param === 'voltaje') {
+    // Agregamos contenido al CSV según el botón presionado
+    if (param === 'voltaje') {  // Datos de tensión
+        // Encabezado del archivo
         csvContent += "Tiempo,Voltaje (V)\n";
+        // Recorremos el array de etiquetas de eje horizontal y vamos guardando las etiquetas (marcas de tiempo)
+        // y los valores en el archivo
         labels.forEach((l, i) => {
             csvContent += `${l},${voltajes[i] || 0}\n`;
         });
-    } else if (param === 'corriente') {
-        csvContent += "Tiempo,Corriente (mA)\n";
+    } else if (param === 'corriente') {  // Datos de corriente
+        csvContent += "Tiempo,Corriente (mA)\n";  // Encabezado del archivo
+        // Recorremos el array de etiquetas de eje horizontal y vamos guardando las etiquetas (marcas de tiempo)
+        // y los valores en el archivo
         labels.forEach((l, i) => {
             csvContent += `${l},${corrientes[i] || 0}\n`;
         });
-    } else if (param === 'temperatura') {
-        csvContent += "Tiempo,Temperatura (C)\n";
+    } else if (param === 'temperatura') {  // Datos de temperatura
+        csvContent += "Tiempo,Temperatura (C)\n";  // Encabezado del archivo
+        // Recorremos el array de etiquetas de eje horizontal y vamos guardando las etiquetas (marcas de tiempo)
+        // y los valores en el archivo
         labels.forEach((l, i) => {
             csvContent += `${l},${temperaturas[i] || 0}\n`;
         });
-    } else {
-        csvContent += "Tiempo,Voltaje (V),Corriente (mA),Temperatura (C)\n";
+    } else {  // Todos los datos
+        csvContent += "Tiempo,Voltaje (V),Corriente (mA),Temperatura (C)\n";  // Encabezado del archivo
+        // Recorremos el array de etiquetas de eje horizontal y vamos guardando las etiquetas (marcas de tiempo)
+        // y los valores en el archivo
         labels.forEach((l, i) => {
             csvContent += `${l},${voltajes[i] || 0},${corrientes[i] || 0},${temperaturas[i] || 0}\n`;
         });
     }
-
+    // Codificamos el URI (identificador de recursos uniforme)
     const encodedUri = encodeURI(csvContent);
+    // Creamos un enlace (etiqueta <a>)
     const link = document.createElement("a");
+    // Cambiamos la propiedad href, asignándole el URI
     link.setAttribute("href", encodedUri);
+    // Cambiamos la propiedad download, asignándole el nombre del archivo que deseamos descargar
     link.setAttribute("download", `datos_sesion_${param}.csv`);
+    // Agregamos el enlace como elemento hijo del body
     document.body.appendChild(link);
+    // Hacemos click en el enlace para descargar la imagen
     link.click();
+    // Quitamos el enlace (elemento hijo del body)
     document.body.removeChild(link);
 }
 
 // --- API CALLS ---
+// ===== CONSULTAS A LA API REST / SERVIDOR =====
+/* Las funciones que realizan consultas a la API son asincrónicas ya que esperan recibir una respuesta del
+servidor (el resultado de una promesa). Para esperar el resultado de una promesa se usa la palabra await.
+En todos los casos hay un bloque try/catch, lo cual nos permite capturar errores en la petición HTTP */
+// Función que se ejecuta cuando se presionan los botones del panel lateral izquierdo (carga, descarga,
+// test auto y parada)
 async function enviarComando(accion) {
     try {
+        // Hacemos una consulta POST a la ruta /comando/{accion} para realizar una acción
         await fetch(`${API}/comando/${accion}`, { method: 'POST' });
     } catch(e) { console.error('Error comando:', e); }
 }
 
+// Función que se ejecuta cuando cambia el perfil en la lista desplegable del panel izquierdo
 async function cambiarPerfil(tipo) {
-    if (!tipo) return;
+    if (!tipo) return;  // Si no se selecciona ningún perfil, finalizamos la ejecución de la función
     try {
+        // Hacemos una consulta POST a la ruta /perfil para cambiar el perfil, el cual se pasa como parámetro de consulta
         const r = await fetch(`${API}/perfil?tipo=${tipo}`, { method: 'POST' });
+        // Convertimos la respuesta a formato JSON
         const d = await r.json();
         console.log('Perfil:', d);
     } catch(e) { console.error(e); }
 }
 
+// Función que se ejecuta al presionar el botón OK que se encuentra a la derecha del campo de texto para ingresar
+// la capacidad nominal
 async function configurarNominal() {
+    // Obtenemos el valor del campo de texto
     const val = document.getElementById('input-cap').value;
     try {
+        // Hacemos una petición POST a la ruta /set_nominal para cambiar la capacidad nominal, la cual se pasa
+        // como parámetro de consulta
         await fetch(`${API}/set_nominal?valor=${val}`, { method: 'POST' });
     } catch(e) { console.error(e); }
 }
 
+// Función que se ejecuta al presionar el botón "Asignar" del encabezado de la página
 async function asignarQR() {
+    // Obtenemos el valor del campo de texto para ingresar el QR y eliminamos los espacios en blanco al comienzo y al final
     const qr = document.getElementById('input-qr').value.trim();
+    // Si no se ingresó QR o su longitud es menor a 2, finalizamos la ejecución de la función
     if (!qr || qr.length < 2) return;
     try {
+        // Realizamos una consulta POST a la ruta /set_qr para publicar el QR, el cual se pasa como parámetro
+        // de consulta. El qr es un componente URI que debe estar codificado
         const r = await fetch(`${API}/set_qr?qr=${encodeURIComponent(qr)}`, { method: 'POST' });
+        // Convertimos la respuesta a formato JSON
         const d = await r.json();
         if (d.status === 'QR asignado') {
+            // Si el QR fue asignado correctamente, actualizamos el QR en el panel lateral izquierdo
             document.getElementById('val-qr').textContent = qr;
         }
     } catch(e) { console.error(e); }
 }
-
+// ID del timer para hacer un encuestado (polling) del QR cada 1 segundo
 let intervalPollQR = null;
 
+// Función que se ejecuta cuando se presiona el botón "Escanear" del encabezado de la página, lo que permite
+// mostrar el stream de video de la cámara
 function escanearConCamara() {
+    // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
     const modal = document.getElementById('modal-camara');
+    // Imagen de la cámara
     const img = document.getElementById('camara-feed');
+    // Contenedor que incluye la ruedita que indica que se está cargando
     const loader = document.getElementById('camara-cargando');
+    // Obtenemos el valor del QR
     const qrInicial = document.getElementById('val-qr').textContent;
 
     // Abrir modal
+    // Agregamos una nueva clase al contenedor de la pantalla secundaria, para modificar la propiedad display
+    // en el CSS
     modal.classList.add('open');
+    // Ocultamos inicialmente la imagen de la cámara
     img.style.display = 'none';
+    // Mostramos el contenedor de carga como flex
     loader.style.display = 'flex';
 
     // Iniciar transmisión de video
+    // Endpoint para hacer una consulta GET a la API para obtener los fotogramas de la cámara mejorados
     img.src = `${API}/video_feed?_=${Date.now()}`;
+    // Callback que se ejecuta cuando se carga la imagen
     img.onload = () => {
+        // Ocultamos el contenedor de carga
         loader.style.display = 'none';
+        // Mostramos la imagen como un elemento en bloque
         img.style.display = 'block';
     };
+    // Callback que se ejecuta cuando hay un error al cargar la imagen
     img.onerror = () => {
+        // Mostramos el contenedor de carga como flex
         loader.style.display = 'flex';
+        // Ocultamos la imagen
         img.style.display = 'none';
         console.error("Error al cargar stream de video.");
     };
@@ -1023,12 +1280,19 @@ function escanearConCamara() {
     // Polling del estado actual cada 1 segundo para ver si el QR cambió
     intervalPollQR = setInterval(async () => {
         try {
+            // Hacemos una consulta GET a la ruta /estado_actual para obtener el estado actual de sistema
             const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
+            // Convertimos la respuesta a formato JSON
             const d = await r.json();
             if (d.qr_actual && d.qr_actual !== 'NINGUNA' && d.qr_actual !== qrInicial) {
+                // Si qr_actual es no nulo, no vale "NINGUNA" y es distinto del QR leído inicialmente de la página,
+                // lo actualizamos
                 const nuevoQR = d.qr_actual;
+                // Cerramos la pantalla de la cámara
                 cerrarModalCamara();
+                // Actualizamos el QR en el panel izquierdo
                 document.getElementById('input-qr').value = nuevoQR;
+                // Actualizamos el QR en el campo de texto del header
                 document.getElementById('val-qr').textContent = nuevoQR;
                 alert(`¡QR decodificado con éxito!: ${nuevoQR}`);
             }
@@ -1038,47 +1302,69 @@ function escanearConCamara() {
     }, 1000);
 }
 
+// Función que cierra la pantalla secundaria para conectar con la cámara. Se ejecuta al presionar el botón
+// cerrar de la ventana que se abre al presionar el botón "Escanear" y también es invocada cuando el QR escaneado
+// es distinto del anterior
 function cerrarModalCamara() {
+    // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
     const modal = document.getElementById('modal-camara');
+    // Imagen de la cámara
     const img = document.getElementById('camara-feed');
-    
+    // Quitamos la clase open que agregamos inicialmente al contenedor de la pantalla secundaria
     modal.classList.remove('open');
+    // Eliminamos el atributo src de la imagen para quitar el URL de la misma
     img.removeAttribute('src');
-    
+    // Finalizamos el encuestado del estado actual si la función fue invocada por escanearConCamara()
     if (intervalPollQR) {
+        // Limpiamos la variable que almacena el timer
         clearInterval(intervalPollQR);
         intervalPollQR = null;
     }
 }
 
 // --- ESTADO POLLING ---
-let ultimoEstado = 'REPOSO';
-
+let ultimoEstado = 'REPOSO';  // Variable que almacena el último estado del sistema
+// Función que se ejecuta indefinidamente cada 2 segundos para actualizar el estado del sistema
 async function actualizarEstado() {
     try {
+        // Hacemos una consulta GET a la ruta /estado_actual
         const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
+        // Convertimos la respuesta a formato JSON
         const d = await r.json();
 
         // Connection
+        // Verificamos si el servidor se conectó al ESP32
         if (d.esp32_online) {
-            connOk = true;
+            connOk = true;  // Bandera para indicar que la conexión con el ESP32 fue exitosa
+            // Quitamos la clase off añadida al puntito
             document.getElementById('conn-dot').classList.remove('off');
+            // Actualizamos el indicador de conexión ubicado en la parte derecha del encabezado de la página
             document.getElementById('conn-text').textContent = 'Conectado';
         } else {
+            // Agregamos una clase llamada "off" al puntito que se encuentra a la izquierda del indicador de conexión
+            // del header, para modificar sus propiedades de CSS
             document.getElementById('conn-dot').classList.add('off');
+            // Actualizamos el indicador de conexión ubicado en la parte derecha del encabezado de la página
             document.getElementById('conn-text').textContent = 'ESP32 Offline';
         }
 
         // Values
-        document.getElementById('val-qr').textContent = d.qr_actual || 'NINGUNA';
+        // Actualizamos los elementos que muestran los valores de las variables en el panel izquierdo
+        // con los valores recibidos del servidor
+        document.getElementById('val-qr').textContent = d.qr_actual || 'NINGUNA';  // QR de la batería
+        // Tensión (la expresamos con dos decimales y le agregamos la unidad V a la derecha con la etiqueta <span>)
         document.getElementById('val-v').innerHTML = d.v_actual.toFixed(2) + '<span style="font-size:12px;opacity:0.6;"> V</span>';
+        // Corriente (la redondeamos a entero y le agregamos la unidad mA a la derecha con la etiqueta <span>)
         document.getElementById('val-i').innerHTML = Math.round(d.i_actual) + '<span style="font-size:12px;opacity:0.6;"> mA</span>';
-        document.getElementById('val-t').textContent = d.t_actual.toFixed(1);
-        document.getElementById('val-tmax').textContent = d.temp_maxima.toFixed(1);
+        document.getElementById('val-t').textContent = d.t_actual.toFixed(1);  // Temperatura (la expresamos con un decimal)
+        document.getElementById('val-tmax').textContent = d.temp_maxima.toFixed(1);  // Temperatura máxima (un decimal)
+        // Capacidad (la expresamos con tres decimales y le agregamos la unidad Ah a la derecha)
         document.getElementById('val-ah').innerHTML = d.ah_acumulado.toFixed(3) + '<span style="font-size:11px;opacity:0.6;"> Ah</span>';
+        // Resistencia interna (la redondeamos a entero y le agregamos la unidad mOhm a la derecha)
         document.getElementById('val-ri').innerHTML = Math.round(d.ri_calculada) + '<span style="font-size:11px;opacity:0.6;"> mΩ</span>';
 
         // Chart values
+        // Actualizamos los valores que se muestran a la derecha de los gráficos
         document.getElementById('chart-val-v').textContent = d.v_actual.toFixed(2) + ' V';
         document.getElementById('chart-val-i').textContent = Math.round(d.i_actual) + ' mA';
         document.getElementById('chart-val-t').textContent = d.t_actual.toFixed(1) + ' °C';
@@ -1089,17 +1375,23 @@ async function actualizarEstado() {
         }
 
         // Update profile selector value to match the active profile
+        // Actualizamos el perfil en la lista desplegable del panel izquierdo para que coincida con el perfil actual
         const selectPerfil = document.getElementById('select-perfil');
         if (d.perfil_actual && selectPerfil.value !== d.perfil_actual) {
+            // Verificamos que el perfil obtenido del servidor coincida con alguno de los perfiles que se
+            // encuentran como opciones en la lista desplegable
             if ([...selectPerfil.options].some(opt => opt.value === d.perfil_actual)) {
                 selectPerfil.value = d.perfil_actual;
             }
         }
 
         // Estado badge
+        // Actualizamos el estado del sistema en el panel izquierdo
         const badge = document.getElementById('badge-estado');
         const est = d.estado_anterior || 'REPOSO';
         badge.textContent = est;
+        // Agregamos una clase a la etiqueta <span> que muestra el estado según el valor recibido, para poder 
+        // aplicarle nuevas propiedades de CSS
         badge.className = 'estado-badge ' + (
             est === 'CARGANDO' ? 'estado-cargando' :
             est === 'DESCARGANDO' ? 'estado-descargando' :
@@ -1107,27 +1399,37 @@ async function actualizarEstado() {
         );
 
         // Chart
+        // Obtenemos la hora actual y la convertimos a string
         const ahora = new Date().toLocaleTimeString('es-AR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         
-        chartV.data.labels.push(ahora);
-        chartV.data.datasets[0].data.push(d.v_actual);
+        // Actualizamos el gráfico de tensión
+        chartV.data.labels.push(ahora);  // Agregamos etiquetas al eje horizontal (marcas de tiempo)
+        chartV.data.datasets[0].data.push(d.v_actual);  // Agregamos valores al gráfico
         if (chartV.data.labels.length > maxPoints) {
+            // Desplazamos las marcas de tiempo y los datos para mantener el número de puntos seleccionado
+            // en el panel de opciones de gráfico (que se abre al presionar el botón "Controles")
             chartV.data.labels.shift();
             chartV.data.datasets[0].data.shift();
         }
         chartV.update();
 
-        chartI.data.labels.push(ahora);
-        chartI.data.datasets[0].data.push(d.i_actual);
+        // Actualizamos el gráfico de corriente
+        chartI.data.labels.push(ahora);  // Agregamos etiquetas al eje horizontal (marcas de tiempo)
+        chartI.data.datasets[0].data.push(d.i_actual);  // Agregamos valores al gráfico
         if (chartI.data.labels.length > maxPoints) {
+            // Desplazamos las marcas de tiempo y los datos para mantener el número de puntos seleccionado
+            // en el panel de opciones de gráfico (que se abre al presionar el botón "Controles")
             chartI.data.labels.shift();
             chartI.data.datasets[0].data.shift();
         }
         chartI.update();
 
-        chartT.data.labels.push(ahora);
-        chartT.data.datasets[0].data.push(d.t_actual);
+        // Actualizamos el gráfico de temperatura
+        chartT.data.labels.push(ahora);  // Agregamos etiquetas al eje horizontal (marcas de tiempo)
+        chartT.data.datasets[0].data.push(d.t_actual);  // Agregamos valores al gráfico
         if (chartT.data.labels.length > maxPoints) {
+            // Desplazamos las marcas de tiempo y los datos para mantener el número de puntos seleccionado
+            // en el panel de opciones de gráfico (que se abre al presionar el botón "Controles")
             chartT.data.labels.shift();
             chartT.data.datasets[0].data.shift();
         }
@@ -1135,13 +1437,15 @@ async function actualizarEstado() {
 
         // Auto-refresh tables on state change
         if (est === 'REPOSO' && ultimoEstado !== 'REPOSO') {
+            // Si el sistema pasa al estado de reposo, actualizamos las tablas de inventario e historial de ciclos
             cargarInventario();
             cargarHistorial();
         }
-        ultimoEstado = est;
+        ultimoEstado = est;  // Actualizamos el estado
 
     } catch(e) {
         if (connOk) {
+            // Si hubo un error, modificamos el indicador de conexión para indicar que se perdió la conexión
             connOk = false;
             document.getElementById('conn-dot').classList.add('off');
             document.getElementById('conn-text').textContent = 'Sin conexión';
@@ -1150,50 +1454,71 @@ async function actualizarEstado() {
 }
 
 // --- INVENTARIO ---
+// Función que actualiza la tabla inferior que muestra el inventario de baterías. Se ejecuta al presionar el
+// botón "Refrescar" y también cuando el sistema pasa al estado de reposo
 async function cargarInventario() {
     try {
+        // Hacemos una consulta GET a la ruta /baterias y obtenemos la respuesta en formato JSON
         const r = await fetch(`${API}/baterias`);
         const bats = await r.json();
+        // Obtenemos el cuerpo de la tabla de inventario y la lista desplegable que permite filtrar por QR
+        // que se encuentra por encima de la tabla de historial de ciclos
         const tbody = document.getElementById('tbody-inventario');
         const filtro = document.getElementById('filtro-qr');
         const filtroActual = filtro.value;
 
-        tbody.innerHTML = '';
+        tbody.innerHTML = '';  // Quitamos temporalmente el contenido de la tabla
         // Update filter options
+        // Recorremos el array de baterías recibido y extraemos los QRs
         const qrs = bats.map(b => b.qr_id);
+        // Actualizamos la lista desplegable agregando todas las baterías recibidas
         filtro.innerHTML = '<option value="">Todas</option>' + qrs.map(q =>
             `<option value="${q}" ${q === filtroActual ? 'selected' : ''}>${q}</option>`
         ).join('');
-
+        // Recorremos el array de baterías recibido y actualizamos la tabla de inventario
         for (const bat of bats) {
-            const tr = document.createElement('tr');
-            tr.className = 'clickable';
+            const tr = document.createElement('tr');  // Creamos una fila
+            tr.className = 'clickable';  // Agregamos a la fila la clase "clickable" para agregar un estilo de CSS
+            // Al hacer click sobre alguna de las filas, se muestra una ventana con el detalle de esa batería
             tr.onclick = () => verDetalle(bat.qr_id);
+            // Agregamos los valores recibidos a la tabla
             tr.innerHTML = `
                 <td class="td-qr">${bat.qr_id}</td>
                 <td class="td-mono">${bat.fecha_registro ? new Date(bat.fecha_registro).toLocaleDateString('es-AR') : '—'}</td>
                 <td class="td-mono">${bat.ciclos_count !== undefined ? bat.ciclos_count : '—'}</td>
                 <td><button class="btn-sm" onclick="event.stopPropagation(); verDetalle('${bat.qr_id}')">Ver</button></td>
             `;
+            // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
         }
     } catch(e) { console.error(e); }
 }
 
 // --- HISTORIAL ---
+// Función que actualiza la tabla inferior que muestra el historial de ciclos de carga/descarga. Se ejecuta
+// al presionar el botón "Refrescar" y también cuando el sistema pasa al estado de reposo
 async function cargarHistorial() {
     try {
+        // Obtenemos el QR de la lista desplegable ubicada en la parte superior de la tabla
         const filtroQR = document.getElementById('filtro-qr').value;
+        // Construimos el URL para hacer la petición a la ruta. Si se seleccionó un QR, hacemos una petición
+        // a la ruta /historial/{filtroQR} para obtener el hisotrial de una sola batería, mientras que si
+        // no se seleccionó ningún QR, hacemos una petición a la ruta /historial para obtener el historial de
+        // ciclos de todas las baterías
         const url = filtroQR ? `${API}/historial/${encodeURIComponent(filtroQR)}` : `${API}/historial`;
+        // Hacemos la petición a la ruta y convertimos la respuesta a JSON
         const r = await fetch(url);
         const hist = await r.json();
+        // Quitamos momentáneamente el contenido de la tabla
         const tbody = document.getElementById('tbody-historial');
         tbody.innerHTML = '';
-
+        // Iteramos sobre el array de ciclos recibido y actualizamos la tabla
         hist.forEach(c => {
-            const tr = document.createElement('tr');
+            const tr = document.createElement('tr');  // Creamos una fila de la tabla
+            // Redondeamos el porcentaje de SoH a un decimal
             const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
             
+            // Agregamos una etiqueta a la columna TIPO en función del estado
             let tipoLabel = '❓ Desconocido';
             if (c.tipo_ciclo.includes('CARGANDO')) {
                 tipoLabel = '⚡ Carga';
@@ -1203,7 +1528,7 @@ async function cargarHistorial() {
             if (c.tipo_ciclo.includes('Interrumpido')) {
                 tipoLabel += ' <span style="color:var(--accent-orange);font-size:10px;font-weight:600;">⚠️ Interr</span>';
             }
-
+            // Agregamos los valores recibidos a la tabla
             tr.innerHTML = `
                 <td class="td-qr">${c.qr_id}</td>
                 <td class="td-mono">${tipoLabel}</td>
@@ -1212,33 +1537,46 @@ async function cargarHistorial() {
                 <td class="td-mono">${Math.round(c.resistencia_interna)}</td>
                 <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
             `;
+            // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
         });
     } catch(e) { console.error(e); }
 }
 
 // --- MODAL DETALLE ---
+// Función que se ejecuta cuando se presiona el botón "Ver" ubicado a la derecha de las filas de la tabla de
+// inventario, o cuando se presiona alguna fila de esa tabla
 async function verDetalle(qr) {
+    // Agregamos a la ventana la clase "open" para modificar sus propiedades al abrirla
     document.getElementById('modal-detalle').classList.add('open');
+    // Modificamos el título de la ventana que muestra el detalle de la batería
     document.getElementById('modal-titulo').textContent = `Batería: ${qr}`;
+    // Agregamos temporalmente un indicador de "Cargando..." al contenedor que agrupa las tarjetas que muestran
+    // las variables de la batería
     document.getElementById('modal-stats').innerHTML = '<div class="modal-stat"><div class="metric-label">Cargando...</div></div>';
+    // Quitamos temporalmente el contenido de la tabla
     document.getElementById('tbody-modal-ciclos').innerHTML = '';
 
     try {
+        // Hacemos la consulta a la ruta /bateria/{qr} y convertimos la respuesta a JSON
         const r = await fetch(`${API}/bateria/${encodeURIComponent(qr)}`);
         const data = await r.json();
 
         if (data.status === 'Error') {
+            // Si hubo un error, cambiamos el indicador de "Cargando..." a "No encontrada" y finalizamos la
+            // ejecución de la función
             document.getElementById('modal-stats').innerHTML = '<div class="modal-stat"><div class="metric-value small">No encontrada</div></div>';
             return;
         }
-
-        const ciclos = data.ciclos || [];
-        const descargas = ciclos.filter(c => c.tipo_ciclo === 'DESCARGANDO');
+        // Obtenemos los valores recibidos
+        const ciclos = data.ciclos || [];  // Array con el detalle de los ciclos
+        const descargas = ciclos.filter(c => c.tipo_ciclo === 'DESCARGANDO');  // Array que guarda los ciclos de descarga
+        // Último SoH y resistencia interna (en caso que haya habido una descarga)
         const ultimoSoH = descargas.length > 0 ? descargas[0].soh_porcentaje : 0;
         const ultimaRI = descargas.length > 0 ? descargas[0].resistencia_interna : 0;
 
         // Stats
+        // Actualizamos las tarjetas ubicadas en la parte superior de la ventana que muestra el detalle de la batería
         document.getElementById('modal-stats').innerHTML = `
             <div class="modal-stat">
                 <div class="metric-label">Total ciclos</div>
@@ -1255,50 +1593,65 @@ async function verDetalle(qr) {
         `;
 
         // SoH Chart
+        // Actualizamos el gráfico de SoH
         const ctxT = document.getElementById('chartTendencia').getContext('2d');
-        if (chartTendencia) chartTendencia.destroy();
+        if (chartTendencia) chartTendencia.destroy();  // Quitamos momentáneamente el gráfico
+        // Invertimos los valores del array de descargas para mostrar el valor de SoH del ciclo más reciente a la derecha del gráfico
         const descOrden = [...descargas].reverse();
+        // Creamos el gráfico de SoH
         chartTendencia = new Chart(ctxT, {
-            type: 'line',
+            type: 'line',  // Tipo de gráfico (línea)
             data: {
-                labels: descOrden.map((_, i) => `Ciclo ${i + 1}`),
+                labels: descOrden.map((_, i) => `Ciclo ${i + 1}`),  // Etiquetas del eje horizontal (ciclos)
                 datasets: [{
                     label: 'SoH %',
-                    data: descOrden.map(c => c.soh_porcentaje),
-                    borderColor: '#4ade80',
-                    backgroundColor: 'rgba(74,222,128,0.05)',
+                    data: descOrden.map(c => c.soh_porcentaje),  // Datos del gráfico (se obtienen del array de descargas invertido)
+                    borderColor: '#4ade80',  // Color del borde
+                    backgroundColor: 'rgba(74,222,128,0.05)',  // Color de fondo
                     fill: true,
                     tension: 0.3,
-                    borderWidth: 1.5,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#4ade80'
+                    borderWidth: 1.5,  // Ancho de borde
+                    pointRadius: 3,  // Radio del punto del gráfico
+                    pointBackgroundColor: '#4ade80'  // Color de fondo de los puntos del gráfico
                 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                plugins: { legend: { display: false } },
+                responsive: true,  // Diseño responsivo
+                maintainAspectRatio: false,  // No mantenemos la razón de aspecto
+                animation: false,  // Sin animación 
+                plugins: { legend: { display: false } },  // Ocultamos la leyenda
                 scales: {
+                    // Escala horizontal
                     x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2233' } },
+                    // Escala vertical de 0 a 100%
                     y: { min: 0, max: 100, ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#1f2233' } }
                 }
             }
         });
 
         // Cycles table
+        // Actualizamos la tabla de ciclos que se encuentra por debajo del gráfico de SoH en la ventana 
+        // que muestra el detalle de baterías
         const tbody = document.getElementById('tbody-modal-ciclos');
-        tbody.innerHTML = '';
+        tbody.innerHTML = '';  // Quitamos momentáneamente el contenido de la tabla
+        // Recorremos el array de ciclos y actualizamos la tabla
         ciclos.forEach(c => {
-            const tr = document.createElement('tr');
+            const tr = document.createElement('tr');  // Creamos una fila
+            // Convertimos la fecha y hora de inicio recibida a string
             const fecha = c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+            // Expresamos el SoH como un porcentaje con un solo decimal
             const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
             
-            const esCarga = c.tipo_ciclo.includes('CARGANDO');
+            // Bandera que indica si hubo una carga
+            const esCarga = c.tipo_ciclo.includes('CARGANDO');  
+            // Bandera que indica si hubo una interrupción en la carga o descarga
             const esInterrumpido = c.tipo_ciclo.includes('Interrumpido');
+            // Ícono para representar el estado de carga
             const icon = esCarga ? '⚡' : '🔋';
+            // Ícono para indicar si la carga fue interrumpida
             const statusIndicator = esInterrumpido ? ' ⚠️' : '';
 
+            // Agregamos los valores recibidos a la tabla
             tr.innerHTML = `
                 <td class="td-mono">${icon}${statusIndicator}</td>
                 <td class="td-mono">${fecha}</td>
@@ -1308,24 +1661,29 @@ async function verDetalle(qr) {
                 <td class="td-mono" style="color:var(--accent-cyan);">${c.voltaje_final ? c.voltaje_final.toFixed(2) : '—'}</td>
                 <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
             `;
+            // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
         });
     } catch(e) { console.error(e); }
 }
-
+// Función que se ejecuta al cerrar la ventana que muestra el detalle de la batería
 function cerrarModal() {
+    // Quitamos la clase "open" de la pantalla de detalle de la batería
     document.getElementById('modal-detalle').classList.remove('open');
 }
 
 // Close modal on overlay click
+// Cerramos la ventana de detalle de batería al hacer click en cualquier punto fuera de la misma
 document.getElementById('modal-detalle').addEventListener('click', function(e) {
     if (e.target === this) cerrarModal();
 });
+// Cerramos la ventana de la cámara al hacer click en cualquier punto fuera de la misma
 document.getElementById('modal-camara').addEventListener('click', function(e) {
     if (e.target === this) cerrarModalCamara();
 });
 
 // Close modal on Escape
+// Cerramos las dos ventanas al presionar la tecla escape del teclado
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         cerrarModal();
@@ -1334,7 +1692,9 @@ document.addEventListener('keydown', function(e) {
 });
 
 // --- INIT ---
+// Cada 2 segundos actualizamos el estado del sistema
 setInterval(actualizarEstado, 2000);
+// Actualizamos las tablas de inventario e historial de ciclos
 cargarInventario();
 cargarHistorial();
 </script>
