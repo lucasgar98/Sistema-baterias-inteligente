@@ -22,6 +22,7 @@ lv_obj_t * ta_corriente_lim;  // Límite de corriente
 // Otros objetos
 lv_obj_t * dd_perfil;  // Lista desplegable para seleccionar el perfil de la batería
 lv_obj_t * btn_stop; // Botón de parada (global para control dinámico)
+lv_obj_t * btn_scan_qr;  // Botón para solicitar escaneo de código QR
 lv_obj_t * overlay_error; // Panel de alerta crítica
 
 // --- CONECTIVIDAD ON-DEMAND ---
@@ -197,7 +198,7 @@ void ui_init(void) {
     // Ponemos un texto por defecto para indicar que no se está mostrando nada
     lv_label_set_text(label_temp, "-- C");
 
-    // Card QR (Text Area para poder escribirlo manualmente)
+    // Card QR (Text Area para poder escribirlo manualmente y botón para escaneo autónomo)
     // Creamos una tarjeta para el QR (hija del tile_main)
     lv_obj_t * card_qr = lv_obj_create(tile_main);
     // Fijamos el tamaño de la tarjeta (ancho y alto)
@@ -220,8 +221,8 @@ void ui_init(void) {
 
     // Creamos un campo de texto para que el usuario pueda ingresar manualmente el QR (hijo de la tarjeta)
     ta_main_qr = lv_textarea_create(card_qr);
-    // Fijamos el tamaño del campo de texto
-    lv_obj_set_size(ta_main_qr, 135, 25);  // Ancho 135px, alto 25px
+    // Fijamos el tamaño del campo de texto (ajustado a 82px para dejar lugar al botón SCAN)
+    lv_obj_set_size(ta_main_qr, 82, 25);  // Ancho 82px, alto 25px
     // Alineamos el campo de texto a la izquierda y hacia abajo y lo posicionamos
     lv_obj_align(ta_main_qr, LV_ALIGN_BOTTOM_LEFT, -10, 5);
     // Fijamos el texto que se mostrará cuando el campo de texto esté vacío
@@ -234,6 +235,19 @@ void ui_init(void) {
     lv_obj_set_style_pad_all(ta_main_qr, 0, 0);  // Padding 0px
     lv_obj_set_style_text_font(ta_main_qr, &lv_font_montserrat_12, 0);  // Fuente Montserrat 12px
     lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xfbbf24), 0);  // Color #FBBF24 (amarillo)
+
+    // Botón SCAN para activar el lector físico de la ESP32-CAM por comando serie
+    btn_scan_qr = lv_btn_create(card_qr);
+    lv_obj_set_size(btn_scan_qr, 48, 24);  // Ancho 48px, alto 24px
+    lv_obj_align(btn_scan_qr, LV_ALIGN_BOTTOM_RIGHT, 10, 5);
+    lv_obj_set_style_bg_color(btn_scan_qr, lv_color_hex(0x0284c7), 0);  // Color azul cian
+    lv_obj_set_style_radius(btn_scan_qr, 6, 0);  // Radio 6px
+    lv_obj_set_style_pad_all(btn_scan_qr, 0, 0);  // Padding 0px
+    lv_obj_add_event_cb(btn_scan_qr, [](lv_event_t * e){ accion_escanear_qr(); }, LV_EVENT_CLICKED, NULL);
+    lv_obj_t * lbl_btn_scan = lv_label_create(btn_scan_qr);
+    lv_label_set_text(lbl_btn_scan, "SCAN");
+    lv_obj_set_style_text_font(lbl_btn_scan, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl_btn_scan);
 
     // Card Estado Actual
     // Creamos una tarjeta para mostrar el estado actual (hija del tile_main)

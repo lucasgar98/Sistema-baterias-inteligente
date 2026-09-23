@@ -866,28 +866,26 @@
     </div>
 </div>
 
-<!-- MODAL: Cámara -->
-<!-- Pantalla que se abre al presionar el botón "Escanear" ubicado en la parte derecha del header -->
-<!-- Esta pantalla se va a eliminar -->
-<div class="modal-overlay" id="modal-camara">  <!-- Pantalla completa -->
-    <div class="modal" style="max-width: 480px; text-align: center;"> <!-- Ventana que se solapa con la pantalla principal -->
-        <div class="modal-header">  <!-- Contenedor que agrupa el título y el botón de cerrar -->
-            <h2>Escanear Código QR</h2>  <!-- Título -->
-            <button class="modal-close" onclick="cerrarModalCamara()">&times;</button>  <!-- Botón de cerrar -->
+<!-- MODAL: Lector QR Autónomo -->
+<!-- Pantalla modal para la espera de lectura del código QR capturado por hardware en la ESP32-CAM -->
+<div class="modal-overlay" id="modal-camara">
+    <div class="modal" style="max-width: 440px; text-align: center;">
+        <div class="modal-header">
+            <h2>Lector de Código QR</h2>
+            <button class="modal-close" onclick="cerrarModalCamara()">&times;</button>
         </div>
-        <div style="position: relative; width: 100%; height: 320px; background: #000; border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border);">
-            <!-- Imagen de la cámara -->
-            <img id="camara-feed" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none; transform: rotate(90deg);" />
-            <!-- Contenedor que agrupa la ruedita y el texto de espera -->
-            <div id="camara-cargando" style="display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text-secondary);">
-                <!-- Ruedita que gira continuamente a la espera de la conexión con la cámara -->
-                <div style="width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span style="font-size: 13px;">Conectando con ESP32-CAM...</span>
+        <div style="position: relative; width: 100%; padding: 28px 16px; background: var(--bg-base); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border: 1px solid var(--border);">
+            <div style="font-size: 40px;">📷</div>
+            <div style="display: flex; align-items: center; gap: 10px; color: var(--accent-cyan);">
+                <div style="width: 16px; height: 16px; border: 3px solid var(--border); border-top: 3px solid var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span style="font-size: 14px; font-weight: 600;">Lector activo en la ESP32-CAM</span>
             </div>
+            <p style="font-size: 13px; color: var(--text-secondary); max-width: 320px; line-height: 1.4;">
+                Acercá el código QR de la batería al sensor de la cámara. La decodificación se realiza automáticamente por hardware.
+            </p>
         </div>
-        <!-- Texto indicativo -->
-        <div style="margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
-            Apunta la cámara al código QR de la batería. Se cerrará automáticamente al decodificar.
+        <div style="margin-top: 16px; display: flex; justify-content: center;">
+            <button class="btn-sm" onclick="cerrarModalCamara()" style="background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); padding: 8px 18px;">Cancelar</button>
         </div>
     </div>
 </div>
@@ -1238,49 +1236,28 @@ async function asignarQR() {
 let intervalPollQR = null;
 
 // Función que se ejecuta cuando se presiona el botón "Escanear" del encabezado de la página, lo que permite
-// mostrar el stream de video de la cámara
-function escanearConCamara() {
+// activar el lector por hardware en la ESP32-CAM y esperar el código QR decodificado
+async function escanearConCamara() {
     // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
     const modal = document.getElementById('modal-camara');
-    // Imagen de la cámara
-    const img = document.getElementById('camara-feed');
-    // Contenedor que incluye la ruedita que indica que se está cargando
-    const loader = document.getElementById('camara-cargando');
     // Obtenemos el valor del QR
     const qrInicial = document.getElementById('val-qr').textContent;
 
-    // Abrir modal
-    // Agregamos una nueva clase al contenedor de la pantalla secundaria, para modificar la propiedad display
-    // en el CSS
+    // Disparamos la orden de escaneo al ESP32 Master vía MQTT a través del endpoint /escanear
+    try {
+        await fetch(`${API}/escanear`, { method: 'POST' });
+    } catch(e) {
+        console.error("Error al disparar escaneo:", e);
+    }
+
+    // Abrir modal de espera
+    // Agregamos una nueva clase al contenedor de la pantalla secundaria, para modificar la propiedad display en el CSS
     modal.classList.add('open');
-    // Ocultamos inicialmente la imagen de la cámara
-    img.style.display = 'none';
-    // Mostramos el contenedor de carga como flex
-    loader.style.display = 'flex';
 
-    // Iniciar transmisión de video
-    // Endpoint para hacer una consulta GET a la API para obtener los fotogramas de la cámara mejorados
-    img.src = `${API}/video_feed?_=${Date.now()}`;
-    // Callback que se ejecuta cuando se carga la imagen
-    img.onload = () => {
-        // Ocultamos el contenedor de carga
-        loader.style.display = 'none';
-        // Mostramos la imagen como un elemento en bloque
-        img.style.display = 'block';
-    };
-    // Callback que se ejecuta cuando hay un error al cargar la imagen
-    img.onerror = () => {
-        // Mostramos el contenedor de carga como flex
-        loader.style.display = 'flex';
-        // Ocultamos la imagen
-        img.style.display = 'none';
-        console.error("Error al cargar stream de video.");
-    };
-
-    // Polling del estado actual cada 1 segundo para ver si el QR cambió
+    // Polling del estado actual cada 800ms para comprobar si el QR fue recibido y decodificado por la ESP32-CAM
     intervalPollQR = setInterval(async () => {
         try {
-            // Hacemos una consulta GET a la ruta /estado_actual para obtener el estado actual de sistema
+            // Hacemos una consulta GET a la ruta /estado_actual para obtener el estado actual del sistema
             const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
             // Convertimos la respuesta a formato JSON
             const d = await r.json();
@@ -1288,7 +1265,7 @@ function escanearConCamara() {
                 // Si qr_actual es no nulo, no vale "NINGUNA" y es distinto del QR leído inicialmente de la página,
                 // lo actualizamos
                 const nuevoQR = d.qr_actual;
-                // Cerramos la pantalla de la cámara
+                // Cerramos la pantalla del lector de cámara
                 cerrarModalCamara();
                 // Actualizamos el QR en el panel izquierdo
                 document.getElementById('input-qr').value = nuevoQR;
@@ -1299,21 +1276,15 @@ function escanearConCamara() {
         } catch(e) {
             console.error("Error en polling de QR:", e);
         }
-    }, 1000);
+    }, 800);
 }
 
-// Función que cierra la pantalla secundaria para conectar con la cámara. Se ejecuta al presionar el botón
-// cerrar de la ventana que se abre al presionar el botón "Escanear" y también es invocada cuando el QR escaneado
-// es distinto del anterior
+// Función que cierra la pantalla secundaria del lector de la cámara. Se ejecuta al presionar cancelar o cuando se decodifica
 function cerrarModalCamara() {
     // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
     const modal = document.getElementById('modal-camara');
-    // Imagen de la cámara
-    const img = document.getElementById('camara-feed');
     // Quitamos la clase open que agregamos inicialmente al contenedor de la pantalla secundaria
     modal.classList.remove('open');
-    // Eliminamos el atributo src de la imagen para quitar el URL de la misma
-    img.removeAttribute('src');
     // Finalizamos el encuestado del estado actual si la función fue invocada por escanearConCamara()
     if (intervalPollQR) {
         // Limpiamos la variable que almacena el timer

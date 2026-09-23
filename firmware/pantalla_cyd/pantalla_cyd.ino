@@ -15,7 +15,7 @@
 #define XPT2046_CLK 25  // Pin CLK (GPIO25)
 #define XPT2046_CS 33  // Pin CS (GPIO33)
 // Pin del led trasero (backlight)
-#define BACKLIGHT_PIN 22  // GPIO22
+#define BACKLIGHT_PIN 21  // Pin del LED trasero (backlight) GPIO21 (GPIO22 es RXD2 de CN1)
 
 // Instancias de Hardware
 // Creamos una instancia de la clase TFT_eSPI
@@ -82,6 +82,13 @@ void my_touchpad_read(lv_indev_drv_t * indev, lv_indev_data_t * data) {
 void accion_iniciar_carga() { Serial2.print("START_C\n"); }  // Envía el comando de inicio de carga 
 void accion_iniciar_descarga() { Serial2.print("START_D\n"); }  // Envía el comando de inicio de descarga
 void accion_parar_todo() { Serial2.print("STOP_ALL\n"); }  // Envía el comando de parada
+
+// Acción para solicitar el escaneo de código QR a la ESP32-CAM a través del Master
+void accion_escanear_qr() {
+  Serial2.print("START_SCAN\n");
+  lv_textarea_set_text(ta_main_qr, "Escaneando...");
+  lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0x38bdf8), 0);  // Color celeste indicando escaneo activo
+}
 
 // Función que guarda la configuración de acuerdo a lo ingresado por el usuario en la pantalla
 void accion_guardar_config() {
@@ -422,6 +429,19 @@ void procesar_comando_recibido(String json_str) {
         lv_obj_clear_state(sw_mqtt, LV_STATE_CHECKED);
       }
     }
+
+    // 2.5. Respuestas de estado del escáner QR provenientes del Master
+    else if (json_str.startsWith("SCAN_STATUS:")) {
+      String status = json_str.substring(12);
+      status.trim();
+      if (status == "TIMEOUT") {
+        lv_textarea_set_text(ta_main_qr, "TIMEOUT");
+        lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xef4444), 0);  // Rojo si hubo timeout
+      } else if (status == "SCANNING") {
+        lv_textarea_set_text(ta_main_qr, "Escaneando...");
+        lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0x38bdf8), 0);  // Celeste durante escaneo
+      }
+    }
     
     // 3. Procesar paquete de Telemetría (JSON)
     else if (json_str.startsWith("{")) {
@@ -462,6 +482,7 @@ void procesar_comando_recibido(String json_str) {
         // Si el usuario estuviera editando el campo de texto, estaría en el estado "LV_STATE_FOCUSED"
         if (!lv_obj_has_state(ta_main_qr, LV_STATE_FOCUSED)) {
             lv_textarea_set_text(ta_main_qr, qr);
+            lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xfbbf24), 0);  // Restaurar color dorado
         }
  
         // --- Lógica Dinámica de Botón STOP y Colores ---

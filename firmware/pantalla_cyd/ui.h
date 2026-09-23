@@ -12,6 +12,7 @@ extern lv_obj_t * ta_main_qr;
 extern lv_obj_t * label_ah_ri;
 extern lv_obj_t * btn_stop;
 extern lv_obj_t * overlay_error;
+extern lv_obj_t * btn_scan_qr;  // Botón para iniciar escaneo de código QR
 
 // --- 2. CONFIGURACIONES DE WIFI Y MQTT ---
 extern lv_obj_t * ta_ssid;
@@ -40,5 +41,6 @@ extern void accion_parar_todo();
 extern void accion_cambiar_perfil();
 extern void accion_guardar_config();
 extern void accion_guardar_limites();
+extern void accion_escanear_qr();  // Callback para iniciar escaneo de código QR
 
 #endif

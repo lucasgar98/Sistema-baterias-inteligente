@@ -237,9 +237,15 @@ def on_message_mqtt(topic, msg):
             # la carga o descarga
             pin_Carga.duty(0)
             pin_Descarga.duty(0)
+            # Notificamos a la cámara para detener el escaneo si estuviese activo
+            uart_cam.write("STOP\n")
         elif not alerta_termica:
             nivelPWM = 0
-            if payload == "START_C":  # Iniciar carga
+            if payload in ("START_SCAN", "SCAN"):  # Orden de escaneo remoto recibida desde MQTT
+                uart_cam.write("SCAN\n")
+                uart_tft.write("SCAN_STATUS:SCANNING\n")
+                print("ORDEN DE ESCANEO ENVIADA A LA CÁMARA DESDE MQTT")
+            elif payload == "START_C":  # Iniciar carga
                 # Actualizamos el estado del sistema
                 estado_Carga = True
                 estado_Descarga = False
@@ -348,14 +354,12 @@ def main():
             # 1. LECTURA DE SENSORES (50 muestras con breve delay)
             tension_sum, corriente_sum = 0, 0
             for i in range(50):
-                # Leemos la tensión de la batería
-                v_bat = (V_REF / K) * (adc_bat.read() / 4095.0)
-                # Sumamos la tensión y la corriente de la batería
-                tension_sum += v_bat
+                # Leemos el valor del ADC de tensión de batería y acumulamos
+                tension_sum += adc_bat.read()
                 corriente_sum += ina.current()
                 sleep(0.002)  # Demora de 2 ms para dar respiro a los buses
-            # Calculamos la tensión y la corriente promedio
-            v_bat_prom = tension_sum / 50.0
+            # Calculamos la tensión promedio escalada por el divisor resistivo del hardware (calibrado a 12.7V fondo de escala)
+            v_bat_prom = (abs(tension_sum / 50.0) * 12.7) / 4095.0
             i_bat_prom = abs(corriente_sum / 50.0)  # i_bat_prom = abs(corriente_sum / 50.0) * 0.8
             # Calculamos la corrección de tensión que compensa dinámicamente las lecturas de la tensión en función de la 
             # caída de tensión introducida por shunts y cables durante la carga (-0.0001 V por mA) y descarga (+0.00015 V por mA)
@@ -535,6 +539,14 @@ def main():
                             estado_Descarga = False
                             pin_Carga.duty(0)
                             pin_Descarga.duty(0)
+                            # Notificamos a la cámara para detener el escaneo si estuviese activo
+                            uart_cam.write("STOP\n")
+
+                        elif comando_raw in ("START_SCAN", "SCAN_QR", "SCAN"):  # Comando para iniciar escaneo QR desde la pantalla
+                            # Enviamos la orden 'SCAN' a la ESP32-CAM por UART1 y notificamos a la pantalla
+                            uart_cam.write("SCAN\n")
+                            uart_tft.write("SCAN_STATUS:SCANNING\n")
+                            print("[SCAN] Solicitud de escaneo enviada a la ESP32-CAM")
                         
                         elif not alerta_termica:
                             nivelPWM = 0
@@ -581,7 +593,31 @@ def main():
                         
                         print(f"Recibido CAM: {comando_cam}")
                         
-                        if comando_cam == "GET_CONFIG":  # Obtener la configuración de la red WiFi
+                        if comando_cam.startswith("QR:"):  # Código QR recibido y decodificado por la cámara
+                            # Extraemos el identificador del código QR recibido
+                            nuevo_qr = comando_cam.replace("QR:", "").strip()
+                            if nuevo_qr:
+                                bateria_qr_actual = nuevo_qr
+                                print(f"[CAM] QR decodificado recibido con éxito: {bateria_qr_actual}")
+                                # Actualizamos inmediatamente el valor en la pantalla táctil CYD
+                                uart_tft.write(f"SET_QR:{bateria_qr_actual}\n")
+                                # Si el cliente MQTT está conectado, publicamos el nuevo QR en el tópico correspondiente
+                                if mqtt_client:
+                                    try:
+                                        mqtt_client.publish(MQTT_TOPIC_QR, bateria_qr_actual)
+                                        print(f"QR publicado en MQTT: {bateria_qr_actual}")
+                                    except Exception as e:
+                                        print("Error publicando QR en MQTT:", e)
+
+                        elif comando_cam == "SCAN_TIMEOUT":  # Tiempo de espera agotado sin detectar QR
+                            print("[CAM] Tiempo de escaneo agotado sin detección.")
+                            uart_tft.write("SCAN_STATUS:TIMEOUT\n")
+
+                        elif comando_cam.startswith("SCAN_STARTING"):  # Confirmación de inicio de escaneo
+                            print("[CAM] Cámara iniciando escaneo.")
+                            uart_tft.write("SCAN_STATUS:SCANNING\n")
+
+                        elif comando_cam == "GET_CONFIG":  # Obtener la configuración de la red WiFi (compatibilidad)
                             # Enviamos las credenciales de la red WiFi a la cámara 
                             respuesta = f"VALUE_CONFIG:{WIFI_SSID},{WIFI_PASSWORD}\n"
                             uart_cam.write(respuesta)

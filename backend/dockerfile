@@ -1,13 +1,12 @@
+# Imagen base oficial de Python 3.10 slim para un contenedor liviano y seguro
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema para pyzbar
-RUN apt-get update && apt-get install -y \
-    libzbar0 \
-    && rm -rf /var/lib/apt/lists/*
+# Instalamos las dependencias de Python necesarias para la API y la persistencia de datos.
+# Nota: Ya no se requieren paquetes pesados de procesamiento de imagen (libzbar0, pyzbar, pillow)
+# dado que la decodificación de códigos QR se realiza localmente por hardware en la ESP32-CAM.
+RUN pip install --no-cache-dir fastapi uvicorn paho-mqtt sqlalchemy influxdb requests
 
-# Instalamos las librerías necesarias
-RUN pip install fastapi uvicorn paho-mqtt sqlalchemy influxdb pyzbar requests pillow
-
+# Comando de inicio del servidor ASGI Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

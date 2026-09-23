@@ -2,15 +2,10 @@ import time
 import json  # Módulo para trabajar con archivos JSON
 from datetime import datetime  # Módulo para trabajar con fecha y hora
 import requests  # Biblioteca para realizar peticiones HTTP
-import io  # Biblioteca para trabajar con flujos de entrada/salida (texto, binarios, etc)
 import csv  # Biblioteca para trabajar con archivos CSV
 # Importamos paho.mqtt, que es una biblioteca para trabajar con MQTT. Permite publicar mensajes 
 # y suscribirse a tópicos MQTT
 import paho.mqtt.client as mqtt
-# Importamos la biblioteca PIL para el procesamiento de imágenes
-from PIL import Image, ImageOps, ImageEnhance
-# Importamos el módulo pzbar para lectura de códigos QR
-from pyzbar.pyzbar import decode
 # Importamos componentes de SQLAlchemy, la cual es un kit de herramientas SQL para interacción con base de datos
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -18,7 +13,6 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from influxdb import InfluxDBClient
 # Importamos componentes propios de FastAPI (framework para construir APIs con Python)
 from fastapi import FastAPI, Response
-from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -106,8 +100,7 @@ ciclo_activo = {
     "cap_nominal": 6.5,  # Capacidad nominal
     "v_corte_carga": 9.0,  # Tensión de corte de carga
     "v_corte_descarga": 6.0,  # Tensión de corte de descarga
-    "esp32_online": False,  # Bandera que indica si se recibieron datos del ESP32
-    "espcam_ip": None  # IP de la ESP32-CAM
+    "esp32_online": False  # Bandera que indica si se recibieron datos del ESP32
 }
 
 # --- TELEGRAM BOT (Placeholder) ---
@@ -131,7 +124,6 @@ def on_connect(client, userdata, flags, rc, properties=None):
         # Suscribimos el servidor a varios tópicos para recibir datos del ESP32
         client.subscribe("ESP32/telemetria")  # Telemetría (variables que representan el estado actual de la batería)
         client.subscribe("ESP32/bateria_qr")  # QR de la batería
-        client.subscribe("ESP32/espcam_ip")  # IP de la cámara ESP32-CAM
     else:
         print(f">>> ERROR DE CONEXIÓN MQTT: Código {rc} <<<")
 
@@ -166,12 +158,7 @@ def on_message(client, userdata, msg):
                     db.commit()
                     print(f"Nueva batería registrada: {qr}")
         
-        elif topic == "ESP32/espcam_ip":
-            ip = payload.strip()  # Quitamos los espacios al comienzo y al final de la cadena
-            if ip:
-                # Guardamos la IP de la cámara en el diccionario
-                ciclo_activo["espcam_ip"] = ip
-                print(f"IP de ESP32-CAM registrada: {ip}")
+
 
         elif topic == "ESP32/telemetria":
             # Parseo rústico del mensaje (v:7.30,i:900,t:25.4,s:CARGANDO,qr:XYZ)
@@ -418,215 +405,13 @@ def set_qr_manual(qr: str):
     # Retornamos el estado y el código QR
     return {"status": "QR asignado", "qr": qr}
 
-def intentar_decodificar(img):
-    # 1. Imagen original
-    # Detectamos los códigos QR en la imagen
-    decoded = decode(img)
-    # Si la imagen fue decodificada, la retornamos
-    if decoded:
-        return decoded
-        
-    # 2. Rotada 90 grados (por si el sensor tiene desenfoque asimétrico vertical u horizontal)
-    try:
-        # Rotamos la imagen 90° en sentido antihorario, expandiendo la salida de imagen para hacerla lo suficientemente grande
-        # como para almacenar la imagen completa rotada 
-        img_rot = img.rotate(90, expand=True)
-        # Decodificamos la imagen rotada
-        decoded = decode(img_rot)
-        # Si la imagen fue decodificada, la retornamos
-        if decoded:
-            return decoded
-    except:
-        img_rot = None
+# Endpoint para disparar el escaneo físico de código QR en la ESP32-CAM
+@app.post("/escanear")
+def disparar_escaneo():
+    """Envía la orden de escaneo al ESP32 Master vía MQTT para activar la ESP32-CAM"""
+    mqtt_client.publish("ESP32/comandos", "START_SCAN")
+    return {"status": "Comando de escaneo enviado a la ESP32-CAM"}
 
-    # 3. Escala de grises + Contraste 2.0
-    try:
-        # Convertimos la imagen a escala de grises
-        gray = ImageOps.grayscale(img)
-        # Ajustamos el contraste de la imagen a escala de grises
-        enhancer = ImageEnhance.Contrast(gray)
-        # Le asignamos a la imagen un factor de mejora de 2.0, para aumentar el contraste
-        img_contrast = enhancer.enhance(2.0)
-        # Intentamos decodificar la imagen mejorada. Si la decodificación fue exitosa, la retornamos
-        decoded = decode(img_contrast)
-        if decoded:
-            return decoded
-    except:
-        gray = None
-
-    # 4. Escala de grises + Contraste 2.0 rotado 90
-    try:
-        if img_rot:
-            # Convertimos la imagen rotada a escala de grises
-            gray_rot = ImageOps.grayscale(img_rot)
-            # Ajustamos el contraste de la imagen rotada a escala de grises
-            enhancer_rot = ImageEnhance.Contrast(gray_rot)
-            # Le asignamos a la imagen un factor de mejora de 2.0, para aumentar el contraste
-            img_contrast_rot = enhancer_rot.enhance(2.0)
-            # Intentamos decodificar la imagen mejorada. Si la decodificación fue exitosa, la retornamos
-            decoded = decode(img_contrast_rot)
-            if decoded:
-                return decoded
-    except:
-        pass  # ==== Falta el manejo de la excepción =====
-
-    # 5. Umbrales binarizados en escala de grises original
-    try:
-        if gray:
-            # Recorremos cada pixel de la imagen, y le asignamos un valor 0 (negro) o 255 (blanco) según si está por debajo o por
-            # encima de un determinado umbral. Realizamos la operación para tres umbrales distintos, y para uno de ellos intentamos
-            # decodificar la imagen
-            for threshold in [127, 90, 160]:  # Umbrales 127, 90 y 160
-                img_bin = gray.point(lambda p: 255 if p > threshold else 0)
-                decoded = decode(img_bin)
-                if decoded:
-                    return decoded
-    except:
-        pass  # ==== Falta el manejo de la excepción =====
-
-    # 6. Redimensionar a 2x (Upscale con resample de calidad para desenfoques)
-    try:
-        try:
-            # Calculamos el valor del pixel de salida usando un filtro Lanczos de alta calidad sobre todos los píxeles que puedan
-            # contribuir al valor de salida
-            resample_filter = Image.Resampling.LANCZOS
-        except AttributeError:
-            resample_filter = Image.LANCZOS
-        # Multiplicamos x2 el tamaño de la imagen, aplicando el filtro de re-muestreo (resampling) seleccionado anteriormente    
-        img_large = img.resize((img.width * 2, img.height * 2), resample_filter)
-        # Intentamos decodificar la imagen mejorada. Si la decodificación fue exitosa, la retornamos
-        decoded = decode(img_large)
-        if decoded:
-            return decoded
-            
-        # 2x Grayscale + Contraste
-        # Convertimos la imagen expandida a escala de grises
-        gray_large = ImageOps.grayscale(img_large)
-        # Ajustamos el contraste de la imagen expandida asignando un factor de mejora de 2.0
-        enhancer_large = ImageEnhance.Contrast(gray_large)
-        img_contrast_large = enhancer_large.enhance(2.0)
-        # Nuevamente intentamos decodificar la imagen
-        decoded = decode(img_contrast_large)
-        if decoded:
-            return decoded
-            
-        # 2x Binarizado (127, 90, 160)
-        for threshold in [127, 90, 160]:
-            # Recorremos cada pixel de la imagen, y le asignamos un valor 0 (negro) o 255 (blanco) según si está por debajo o por
-            # encima de un determinado umbral. Realizamos la operación para tres umbrales distintos, y para uno de ellos intentamos
-            # decodificar la imagen
-            img_bin_large = gray_large.point(lambda p: 255 if p > threshold else 0)
-            decoded = decode(img_bin_large)
-            if decoded:
-                return decoded
-    except:
-        pass  # ==== Falta el manejo de la excepción =====
-    # Si no se pudo decodificar la imagen, retornamos None
-    return None
-# Creamos la ruta /video_feed y manejamos las peticiones GET a esa ruta
-# Esta ruta permite captar el stream de la imagen y aplicar un pipeline de mejora de imagen
-@app.get("/video_feed")
-def video_feed():
-    """Proxy de streaming de video MJPEG que decodifica códigos QR sobre la marcha"""
-    # Obtenemos la IP de la ESP-CAM
-    ip = ciclo_activo.get("espcam_ip")
-    if not ip:
-        # Si no se obtuvo el IP de la cámara, enviamos una respuesta al cliente con código de error 404
-        return Response(status_code=404, content="Cámara no detectada")
-    
-    # Limpiar cualquier mensaje de depuración basura del puerto serial (ej. DMA overflow)
-    # Para eso iteramos sobre la cadena que guarda la IP recibida, y nos quedamos con aquellos caracteres
-    # que sean números o puntos
-    ip = "".join(c for c in ip if c.isdigit() or c == '.')
-    # Para que la IP sea correcta, la longitud debe ser como mínimo 7 (4 dígitos y 3 puntos)
-    if len(ip) < 7:
-        # Si la IP no es correcta, enviamos una respuesta con código de error 404
-        return Response(status_code=404, content="IP de cámara inválida")
-
-    url = f"http://{ip}/stream"  # URL en el cual la cámara expone los fotogramas MJPEG
-    # Función que realiza una petición GET a la URL anterior y devuelve la imagen decodificada y mejorada
-    def generate():
-        try:
-            # Hacemos una petición GET al endpoint de la cámara, con un tiempo de espera de 5 segundos
-            r = requests.get(url, stream=True, timeout=5.0)
-            # Si el código de estado es distinto de 200 (OK) finalizamos la ejecución de la ejecución
-            if r.status_code != 200:
-                return
-            # Creamos un buffer de tipo bytes para almacenar las tramas MJPEG recibidas
-            buffer = b""
-            # Iteramos sobre el contenido de la respuesta, procesando el flujo en trozos (chunks) de 4096 bytes para manejar la memoria
-            # de forma más eficiente
-            for chunk in r.iter_content(chunk_size=4096):
-                # Guardamos los bytes en el buffer
-                buffer += chunk
-                while True:
-                    # Buscamos los caracteres de inicio del fotograma JPEG (\xFF\xD8)
-                    start = buffer.find(b"\xff\xd8")  # Devuelve la posición del primer caracter (\xFF)
-                    if start == -1:
-                        if len(buffer) > 0:
-                            buffer = buffer[-1:]
-                        break
-                    # Buscamos los caracteres de fin del fotograpa JPEG (\xFF\xD9)    
-                    end = buffer.find(b"\xff\xd9", start)  # Devuelve la posición del anteúltimo caracter (\xFF)
-                    if end == -1:
-                        break
-                    # Guardamos los caracteres correspondientes a la imagen JPG    
-                    jpg = buffer[start:end+2]
-                    # Guardamos los caracteres que sobraron
-                    buffer = buffer[end+2:]
-                    
-                    # Decodificar QR en este frame con super-pipeline
-                    try:
-                        # Abrimos la imagen convertida en un flujo de datos binario, como si fuera un archivo físico
-                        img = Image.open(io.BytesIO(jpg))
-                        # Realizamos la decodificación de la imagen
-                        decoded = intentar_decodificar(img)
-                                        
-                        if decoded:
-                            # Accedemos al primer código QR detectado, obtenemos la información de ese QR, 
-                            # la decodificamos en UTF-8 y quitamos los espacios al comienzo y al final de la cadena
-                            qr_text = decoded[0].data.decode('utf-8').strip()
-                            if qr_text and len(qr_text) > 2:
-                                # ¡Encontrado!
-                                # Si qr_text no está vacío y su longitud es mayor a 2, quiere decir que se encontró el QR
-                                ciclo_activo["qr_actual"] = qr_text
-                                # Publicamos el QR en el tópico "ESP32/bateria_qr"
-                                mqtt_client.publish("ESP32/bateria_qr", qr_text)
-                                
-                                # Registrar en base de datos
-                                # Abrimos una sesión de la base de datos SQL, realizamos la consulta a la tabla Inventario, filtramos por
-                                # el QR y devolvemos el primer resultado de la consulta
-                                db = SessionLocal()
-                                bateria = db.query(Inventario).filter(Inventario.qr_id == qr_text).first()
-                                if not bateria:
-                                    # Si la batería no está en la BD, la agregamos
-                                    nueva_bat = Inventario(qr_id=qr_text)
-                                    db.add(nueva_bat)
-                                    db.commit()  # Confirmamos el cambio para que los datos persistan
-                                db.close()  # Cerramos la sesión de la base de datos
-                                
-                                # Yield el último frame de éxito
-                                # La palabra clave yield permite a las funciones generar valores de a uno en lugar de retornar todo de una
-                                # Esto permite retornar los fotogramas de a uno
-                                yield (b'--frame\r\n'
-                                       b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
-                                return # Terminar la transmisión
-                    except Exception as e:
-                        pass
-                        
-                    # Yield el frame normal
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
-        except Exception as e:
-            print(f"Error en stream de video: {e}")
-    # Retornamos la respuesta en formato streaming (flujo) 
-    # "multipart" indica que el contenido de la respuesta HTTP está formado por múltiples partes independientes, mientras que "x-mixed-replace"
-    # indica que esas partes se van enviando sucesivamente y que cada nueva parte reemplaza visualmente a la anterior
-    # "boundary" es un separador que permite al cliente saber dónde termina una parte y comienza la siguiente. Puede tomar cualquier valor
-    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
-
-# Creamos la ruta /bateria/{qr_id} y manejamos las peticiones GET a esa ruta
-# Esta ruta permite a la interfaz web obtener todas las baterías registradas, así como también el historial de ciclos de carga y descarga
 @app.get("/bateria/{qr_id}")
 def detalle_bateria(qr_id: str):
     """Resumen completo de una batería: inventario + historial de ciclos"""
