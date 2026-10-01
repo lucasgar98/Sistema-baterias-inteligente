@@ -1,0 +1,67 @@
+# ====== PYTHON Y BACKEND ======
+# Cache de Python
+backend/__pycache__/
+
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+ENV/
+
+# ====== INFLUX DB Y MOSQUITTO =======
+# Datos de las series temporales (generados en ejecución)
+influxdb/data/data/
+# Carpetas propias de InfluxDB 2.x
+influxdb/data/meta/
+influxdb/data/wal/
+
+# Mosquitto: Persistencia de mensajes en tiempo de ejecución
+mosquitto/data/
+
+# ====== FIRMWARE ======
+# Ignorar archivo con contraseñas Wi-Fi/MQTT reales (se usa config.json.template como base)
+firmware/esp32_master/config.json
+
+# ====== HARDWARE ======
+# Respaldos y copias automáticas de KiCad
+*-backups/
+_restore_backup_*/
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.sch-bak
+
+# Archivos de bloqueo y caché de KiCad
+*.lck
+~*
+fp-info-cache
+
+# Configuraciones locales de usuario de KiCad (zoom, posición de ventanas)
+*.kicad_prl
+
+# Configuraciones de workspace de Proteus específicas del usuario
+*.workspace.xml
+
+# Salidas de compilación y temporales de EEZ Studio
+.docker-build-output/
+.eez-project-build/
+*.eez-project-ui-state
+
+# ====== VIDEOS ======
+# Los videos son muy pesados para Git, por lo que se recomienda subirlos a Drive
+# Podemos poner un enlace a la carpeta de Google Drive en el README
+documentacion/videos
+*.mp4
+*.mkv
+*.avi
+
+# ====== ARCHIVOS DE SISTEMA Y EDITORES ======
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Extensiones de historial local y configuración de editores
+.history/
+.vscode/
+.idea/
