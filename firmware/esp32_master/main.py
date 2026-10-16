@@ -369,6 +369,11 @@ while True:
         # caída de tensión introducida por shunts y cables durante la carga (-0.0001 V por mA) y descarga (+0.00015 V por mA)
         ajuste = -0.0001 if estado_Carga else (0.00015 if estado_Descarga else 0)
         v_bat_aj = v_bat_prom + (ajuste * i_bat_prom)
+        # Si la tensión cae por debajo de 1 V o la corriente cae por debajo de 50 mA, la ponemos en 0
+        if(v_bat_aj < 1.0):
+            v_bat_aj = 0.0
+        if(i_bat_prom < 50.0):
+            i_bat_prom = 0.0
         # Leemos la temperatura del termistor NTC
         temperatura = leer_temperatura()
         # 2. LÓGICA DE SEGURIDAD
