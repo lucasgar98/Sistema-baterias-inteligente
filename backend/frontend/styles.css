@@ -1,0 +1,766 @@
+/* SELECTOR UNIVERSAL (se aplica a todos los elementos de la página) */
+*, *::before, *::after { 
+    box-sizing: border-box;  /* El cálculo del ancho y alto de un elemento incluye el padding y el borde */
+    margin: 0;  /* Los cuatro márgenes (inferior, superior, izquierdo y derecho) valen 0 */
+    padding: 0;  /* Los cuatro paddings valen 0 */
+}
+/* VARIABLES GLOBALES; se declaran dentro del selector :root, el cual empareja el elemento
+root del documento (etiqueta <html>) */
+:root {
+    /* ===== Paleta de colores ===== */
+    /* Colores de fondo */
+    --bg-base: #0f1117;
+    --bg-panel: #1a1d27;
+    --bg-card: #21242f;
+    --bg-hover: #282c3a;
+    /* Colores de los bordes */
+    --border: #2a2d3a;
+    --border-light: #363a4a;
+    /* Colores del texto */
+    --text-primary: #e4e4e7;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    /* Colores de otros elementos (botones, indicadores, gráficas, etc.) */
+    --accent-cyan: #22d3ee;
+    --accent-violet: #a78bfa;
+    --accent-red: #f87171;
+    --accent-green: #4ade80;
+    --accent-yellow: #fbbf24;
+    --accent-orange: #fb923c;
+    /* ===== Familia de fuentes ===== */
+    --font-ui: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    /* Radio */
+    --radius: 8px;
+    /* Transición (permite cambiar los valores de una propiedad de manera suave) */
+    --transition: 150ms ease; /* Transición de 150 ms que arranca lento, luego va rápido y termina lento (valor ease) */
+}
+/* --- BODY (CUERPO DE LA PÁGINA) --- */
+body {
+    font-family: var(--font-ui);  /* Familia de fuentes */
+    background: var(--bg-base);  /* Color de fondo */
+    color: var(--text-primary);  /* Color de texto */
+    min-height: 100vh;  /* Altura mínima (100% de la altura de la ventana gráfica o viewport) */
+    line-height: 1.5; /* Altura de un renglón (1.5 veces el tamaño de la fuente) */
+}
+
+/* --- LAYOUT --- */
+/* Pantalla principal */
+.app { 
+    max-width: 1280px;  /* Ancho máximo */
+    margin: 0 auto;  /* Margen inferior y superior 0, margen izquierdo y derecho calculados automáticamente por el navegador */
+    padding: 20px 24px;  /* Padding inferior y superior de 20px, padding izquierdo y derecho de 24px */
+}
+/* Header de la pantalla principal */
+.header {
+    display: flex;  /* Contenedor flex */
+    align-items: center;  /* Alineación central a lo largo del eje secundario */
+    justify-content: space-between; /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+    padding-bottom: 16px;  /* Padding inferior */
+    border-bottom: 1px solid var(--border); /* Borde inferior sólido de 1px */
+    margin-bottom: 20px;  /* Margen inferior */
+    gap: 16px;  /* Separación entre filas y columnas dentro del contenedor flex */
+    flex-wrap: wrap;  /* Permite a los ítems flexibles pasar a la siguiente línea si no caben en el contenedor */
+}
+/* Título dentro del header */
+.header h1 {
+    font-size: 18px;  /* Tamaño de fuente */
+    font-weight: 700;  /* Grosor de la fuente (negrita) */
+    letter-spacing: -0.02em; /* Espaciado entre letras (lo reducimos en 0.02 veces el tamaño de la fuente del navegador) */
+    white-space: nowrap; /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
+}
+/* Parte derecha del encabezado */
+.header-right {
+    display: flex;  /* Contenedor flex */
+    align-items: center; /* Alineación central a lo largo del eje secundario */
+    gap: 20px;  /* Separación entre filas y columnas dentro del contenedor flex */
+    flex-wrap: wrap;  /* Los ítems del flex pasan a la siguiente línea si no caben en el contenedor */
+}
+
+/* QR Input */
+/* Contenedor que agrupa las opciones de QR */
+.qr-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+/* Etiqueta dentro del contenedor QR (texto "Batería QR") */
+.qr-input-group label {
+    font-size: 12px;
+    color: var(--text-secondary);  /* Color del texto */
+    font-weight: 500;  /* Grosor de la fuente */
+    white-space: nowrap;  /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
+}
+/* Campo de texto dentro del contenedor QR para ingresar el código de la batería */
+.qr-input-group input {
+    background: var(--bg-card);  /* Color de fondo */
+    border: 1px solid var(--border);  /* Borde sólido de 1px */
+    color: var(--accent-yellow);  /* Color del texto (amarillo) */
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 6px 10px;  /* Padding inferior y superior de 6px, padding izquierdo y derecho de 10px */
+    border-radius: var(--radius);  /* Borde redondeado */
+    width: 160px;  /* Ancho del elemento */
+    outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+    transition: border-color var(--transition);  /* Transición para el color del borde */
+}
+/* Cambiamos el color del campo de texto al posicionar el cursor sobre él usando la pseudo-clase :focus */
+.qr-input-group input:focus { border-color: var(--accent-yellow); }
+/* Fijamos el color del texto por defecto usando el pseudo-elemento ::placeholder */
+.qr-input-group input::placeholder { color: var(--text-muted); }
+
+/* Botones "Asignar" y "Escanear" */
+.btn-sm {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;  /* Grosor del texto */
+    padding: 6px 12px;  /* Padding inferior y superior de 6px, padding derecho e izquierdo de 12px */
+    border-radius: var(--radius);  /* Borde redondeado */
+    border: 1px solid var(--border);
+    background: var(--bg-card);  /* Color de borde */
+    color: var(--text-primary);
+    cursor: pointer;  /* Cambia el cursor al posicionarlo sobre el botón */
+    transition: background var(--transition), border-color var(--transition);  /* Transición para el fondo y el color de borde */
+    white-space: nowrap;  /* Espacio en blanco dentro de un elemento (en este caso, el texto nunca pasa a la siguiente línea) */
+}
+/* Cambiamos el color de fondo y el color de borde al posicionar el cursor sobre el botón, usando la pseudo-clase :hover */
+.btn-sm:hover { background: var(--bg-hover); border-color: var(--border-light); }
+
+/* Botón para escanear el QR */
+#btn-escanear-qr {
+    background: var(--bg-hover); 
+    border-color: var(--accent-cyan); 
+    color: var(--accent-cyan);
+}
+
+/* Connection indicator */
+/* Contenedor del indicador de conexión */
+.conn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+/* Punto que se ubica a la izquierda del texto de indicador de conexión */
+.conn-dot {
+    width: 8px;  /* Ancho de 8px */
+    height: 8px;  /* Altura de 8px */
+    border-radius: 50%;  /* Borde redondeado de 50% del tamaño del contenedor padre */
+    background: var(--accent-green);  /* Color de fondo (verde por defecto) */
+}
+/* Permite cambiar el color de fondo del punto a rojo cuando no hay conexión */
+.conn-dot.off { background: var(--accent-red); }
+
+/* --- GRID --- */
+/* Panel principal (panel de control + panel gráfico) */
+.main-grid {
+    display: grid;  /* Contenedor grid (permite organizar el contenido de la página en filas y columnas)  */
+    grid-template-columns: 300px 1fr;  /* Primer columna de 300px; la segunda ocupa el espacio restante */
+    gap: 16px;  /* Separación de 16px entre las filas y las columnas */
+}
+/* Media query para cambiar el tamaño de las columnas cuando el ancho de la pantalla cae por debajo de 900px.
+De esta manera, los elementos de los grid quedan uno debajo del otro */
+@media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+}
+/* Sección inferior de la página que muestra las tablas de inventario e historial de ciclos */
+.bottom-grid {
+    display: grid;  /* Contenedor grid */
+    grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible */
+    gap: 16px;
+    margin-top: 16px;  /* Margen superior de 16 px */
+}
+
+/* --- PANELS --- */
+/* Panel lateral (panel de control) */
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+/* Título del panel lateral */
+.panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;  /* Convertimos el texto a mayúscula */
+    letter-spacing: 0.06em;  /* Espaciado entre letras (lo aumentamos en 0.06 veces el tamaño de la fuente del navegador) */
+    color: var(--text-muted);  /* Color del texto */
+    margin-bottom: 12px;  /* Margen inferior */
+}
+
+/* --- METRICS --- */
+/* Contenedor que agrupa las tarjetas que muestran los valores de cuatro variables */
+.metrics-grid {
+    display: grid;  /* Contenedor grid */
+    grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible en el contenedor */
+    gap: 8px;  /* Separación entre elementos */
+    margin-bottom: 12px;
+}
+/* Tarjetas para mostrar los valores de las variables */
+.metric {
+    background: var(--bg-card);  /* Color de fondo */
+    border-radius: 6px;  /* Borde redondeado de 6px */
+    padding: 10px;  /* Padding total (inferior, superior, izquierdo y derecho) de 10px */
+    text-align: center;  /* Alineación del texto */
+}
+/* Etiquetas que muestran el nombre de la variable */
+.metric-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;  /* Convertimos el texto a mayúscula */
+    letter-spacing: 0.05em;  /* Espaciado entre letras (lo aumentamos en 0.05 veces el tamaño de la fuente del navegador) */
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+/* Valores de las variables */
+.metric-value {
+    font-family: var(--font-mono);  /* Familia de fuente (diferente a la fuente principal de la página) */
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;  /* Altura de un renglón (1.2 veces el tamaño de la fuente) */
+}
+/* Valores de la variables en formato pequeño (resistencia interna y capacidad) 
+La clase .small hereda las propiedades de la clase .metric-value */
+.metric-value.small { font-size: 16px; }
+/* Contenedor del QR de la batería activa (hereda las propiedades de .metric) */
+.metric-full { 
+    grid-column: 1 / -1;
+    margin-bottom: 10px;
+}
+/* QR de la batería activa */
+#val-qr { color: var(--accent-yellow); }
+
+/* Valores y unidades de las cuatro variables del panel izquierdo */
+.metric-value.v { color: var(--accent-cyan); }  /* Tensión */
+.metric-value.i { color: var(--accent-violet); }  /* Corriente */
+.metric-value.ah { color: var(--accent-green); }  /* Capacidad */
+.metric-value.ri { color: var(--accent-orange); }  /* Resistencia interna */
+
+/* Unidad de las variables tensión y corriente*/
+.unit { font-size: 16px; }
+/* Unidad de las variables capacidad y resistencia interna */
+.unit-small { font-size: 13px; }
+
+/* Estado */
+.estado-badge {
+    display: inline-block;  /* Muestra los elementos como un contenedor de bloque de nivel en línea */
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 14px;  /* Padding inferior y superior de 6px, padding izquierdo y derecho de 14px */
+    border-radius: 4px;
+    text-align: center;  /* Alineación del texto */
+    width: 100%;  /* Ancho del 100% relativo al contenedor padre */
+    letter-spacing: 0.03em;  /* Espaciado entre letras (lo aumentamos en 0.03 veces el tamaño de la fuente del navegador) */
+}
+/* Lista de estados posibles del sistema (heredan las propiedades de .estado-badge) */
+.estado-reposo { background: #1f2937; color: var(--text-secondary); }
+.estado-cargando { background: #064e3b; color: var(--accent-green); }
+.estado-descargando { background: #78350f; color: var(--accent-yellow); }
+.estado-error { background: #7f1d1d; color: var(--accent-red); font-size: 15px;}
+
+/* --- CONFIG SECTION --- */
+/* Contenedor de configuración */
+.config-group {
+    margin-bottom: 10px;
+}
+/* Etiqueta dentro del contenedor de configuración */
+.config-group label {
+    display: block;  /* Muestra el elemento como un elemento en bloque */
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+    font-weight: 500;
+}
+/* Lista desplegable dentro del contenedor de configuración y campo de texto para ingresar la capacidad nominal */
+.config-group select, .config-group input {
+    width: 100%;  /* Ancho del 100% relativo al contenedor padre */
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+    transition: border-color var(--transition);  /* Transición para el color del borde */
+}
+/* Modificamos el borde al hacer click en la lista despegable o en el campo de texto 
+mediante la pseudo-clase :focus */
+.config-group select:focus, .config-group input:focus { border-color: var(--accent-cyan); }
+
+/* Contenedor para seleccionar la capacidad nominal */
+.config-row {
+    display: flex;  /* Contenedor flex */
+    gap: 6px;
+    align-items: flex-end;  /* Alinea los ítems al borde del contenedor */
+}
+/* Hacemos que todos los elementos flexibles tengan la misma longitud, sin importar su contenido */
+.config-row .config-group { flex: 1; }
+
+/* --- BUTTONS --- */
+/* Contenedor de los botones */
+.btn-grid {
+    display: grid;  /* Contenedor grid */
+    grid-template-columns: 1fr 1fr;  /* Cada elemento ocupa la mitad del espacio disponible en el contenedor */
+    gap: 6px;
+    margin-top: 12px;  /* Margen superior */
+    padding-top: 12px;  /* Padding superior */
+    border-top: 1px solid var(--border);  /* Borde superior sólido de 1 px */
+}
+/* Botones para enviar órdenes al sistema (carga, descarga, parada y test auto) */
+.btn {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 700;  /* Grosor de la fuente (negrita) */
+    padding: 10px 8px;  /* Padding inferior y superior de 10px, padding izquierdo y derecho de 8px */
+    border-radius: 6px;
+    border: none;  /* Sin borde */
+    cursor: pointer;  /* Cambia la forma del cursor al posicionarlo sobre el botón */
+    transition: opacity var(--transition), transform 80ms ease;  /* Transición en la opacidad y transformación de 80 ms que arranca lento, luego va rápido y termina lento (valor ease)*/
+    letter-spacing: 0.02em;  /* Aumentamos el espaciado entre letras 0.02 veces el tamaño de la fuente del navegador */
+}
+
+/* Botón OK para seleccionar la capacidad nominal */
+#btn-ok {
+    margin-bottom: 10px;
+}
+
+/* ==== Estilos específicos de los botones ==== */
+/* Cambiamos la escala de los botones al 97% (tanto el ancho como el alto) cuando se presiona el botón,
+usando la pseudo-clase :active */
+.btn:active { 
+    transform: scale(0.97); 
+}
+/* Cambiamos la opacidad (transparencia) al 85% al posicionar el cursor sobre el botón */
+.btn:hover { opacity: 0.85; }
+/* Botón de carga (hereda las propiedades de .btn) */
+.btn-charge { background: #16a34a; color: #fff; }
+/* Botón de descarga (hereda las propiedades de .btn) */
+.btn-discharge { background: #d97706; color: #000; }
+/* Botón para el modo auto (hereda las propiedades de .btn) */
+.btn-auto { 
+    background: #2563eb; 
+    color: #fff; 
+    /*grid-column: 1 / -1; */  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
+}
+/* Botón de parada (hereda las propiedades de .btn) */
+.btn-stop { 
+    background: #dc2626; 
+    color: #fff; 
+    /*grid-column: 1 / -1;*/  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
+    /* font-size: 14px; */ 
+    padding: 12px; 
+}
+
+/* --- CHART --- */
+/* Contenedor del panel de gráficos */
+.panel {
+    display: flex; 
+    flex-direction: column; 
+    gap: 16px;
+}
+/* Encabezado del panel */
+.panel-header { margin-bottom: 0; }
+/* Menú de opciones del panel (alineación derecha) */
+.panel-actions { gap: 10px; }
+
+/* Contenedor del panel de configuración para base de tiempos y escalas (oculto por defecto) */
+#chart-controls-panel {
+    display: none; 
+    background: var(--bg-card); 
+    border: 1px solid var(--border); 
+    padding: 12px; 
+    border-radius: var(--radius); 
+    gap: 12px; 
+    flex-wrap: wrap;
+}
+
+/* Contenedores para seleccionar las escalas de los gráficos en el panel oculto */
+.scales-group {
+    flex: 1;
+    min-width: 140px;
+}
+.scales-group.timebase {
+    min-width: 120px;
+}
+
+/* Etiquetas correspondientes a los selectores de escalas */
+.scales-label {
+    font-size: 11px; 
+    color: var(--text-muted); 
+    display: block; 
+    margin-bottom: 4px;
+}
+/* Selector de base de tiempos */
+#select-timebase {
+    width: 100%; 
+    background: var(--bg-panel); 
+    border: 1px solid var(--border); 
+    color: var(--text-primary); 
+    padding: 4px 8px; 
+    border-radius: 4px; 
+    font-size: 12px; 
+    outline: none;
+}
+
+/* Contenedor para seleccionar los límites inferior y superior de las escalas de tensión, corriente y temperatura */
+.scale-limits {
+    display: flex; 
+    gap: 4px; 
+    align-items: center;
+}
+
+/* Texto "a" que se encuentra entre el límite superior y el límite inferior */
+.scale-limits span {
+    font-size: 11px; 
+    color: var(--text-muted);
+}
+
+/* Entradas para seleccionar los límites */
+.scale-limits input {
+    width: 50px; 
+    background: var(--bg-panel); 
+    border: 1px solid var(--border); 
+    color: var(--text-primary); 
+    padding: 2px 4px; 
+    border-radius: 4px; 
+    font-size: 11px; 
+    outline: none;
+}
+
+/* Contenedor del menú de exportación (oculto por defecto) */
+#export-menu-panel {
+    display: none; 
+    background: var(--bg-card); 
+    border: 1px solid var(--border); 
+    padding: 12px; 
+    border-radius: var(--radius); 
+    gap: 10px; 
+    flex-direction: column;
+}
+
+/* Texto que aparece encima de los botones de exportación */
+.export-text {
+    font-size: 12px; 
+    font-weight: 600; 
+    color: var(--text-secondary);
+}
+
+/* Contenedor de los botones para exportar variables */
+.export-buttons {
+    display: flex; 
+    gap: 6px; 
+    flex-wrap: wrap;
+}
+
+/* Línea divisoria entre los botones para exportar gráficos en PNG y los botones para exportar datos en formato CSV */
+#export-div-line {
+    height: 1px; 
+    background: var(--border); 
+    margin: 4px 0;
+}
+
+/* Panel de gráficos propiamente dicho */
+#chart-panel {
+    display: flex; 
+    flex-direction: column; 
+    gap: 14px;
+}
+
+/* Tarjeta o contenedor de cada uno de los gráficos */
+.chart-card {
+    background: var(--bg-card); 
+    border: 1px solid var(--border); 
+    border-radius: var(--radius); 
+    padding: 10px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 6px;
+}
+
+/* Encabezado de la tarjeta de los gráficos (contenedor que agrupa el nombre de la variable junto con su valor) */
+.chart-card-header {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: baseline;
+}
+
+/* Título del gráfico (nombre de la variable) */
+.chart-title {
+    font-size: 11px; 
+    font-weight: 600; 
+    text-transform: uppercase; 
+    letter-spacing: 0.05em; 
+    color: var(--text-secondary);
+}
+/* Valores de las variables en la parte derecha del encabezado del gráfico */
+.chart-val {
+    font-family: var(--font-mono); 
+    font-size: 18px; 
+    font-weight: 700;
+}
+#chart-val-v { color: var(--accent-cyan); }  /* Tensión */
+#chart-val-i { color: var(--accent-violet); }  /* Corriente */
+#chart-val-t { color: var(--accent-red); }  /* Temperatura */
+
+/* Contenedor del gráfico */
+.chart-container {
+    height: 95px; 
+    position: relative;
+}
+
+/* --- TABLES --- */
+/* Contenedor de la tabla ubicada en la parte inferior */
+.table-wrap {
+    overflow-y: auto; /* Permite agregar una barra de scrolleo cuando el contenido de la tabla desborda los bordes superior e inferior de la misma */
+    max-height: 280px;  /* Altura máxima de la tabla */
+}
+/* Personalizamos la apariencia de la barra de scrolleo de las tablas */
+.table-wrap::-webkit-scrollbar { width: 4px; }
+.table-wrap::-webkit-scrollbar-track { background: transparent; }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* Tabla propiamente dicha */
+table { 
+    width: 100%;  /* La tabla ocupa el 100% de su contenedor */
+    border-collapse: collapse;  /* Permite que los bordes de cada celda de la tabla colapsen en uno solo */
+}
+/* Encabezado de la tabla */
+thead { 
+    position: sticky;  /* El encabezado queda siempre en la parte superior al hacer scroll hacia abajo */
+    top: 0;  /* Hace que la posición sea relativa cuando el encabezado está dentro de los límites de la tabla, y fija cuando está fuera */
+    z-index: 1;  /* Permite que el encabezado se posicione por encima de la tabla al hacer scroll down */
+}
+/* Elementos del encabezado */
+thead th {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;  /* Convierte la texto a mayúscula */
+    letter-spacing: 0.05em;  /* El espaciado entre letras será 0.05 veces el tamaño de la fuente */
+    color: var(--text-muted);
+    text-align: left;  /* Alineación izquierda del texto */
+    padding: 8px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);  /* Borde inferior */
+}
+/* Celdas de la tabla */
+tbody td {
+    font-size: 12px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+/* Filas de la tabla */
+tbody tr { 
+    transition: background var(--transition);  /* Transición de color de fondo */
+}
+/* Cambiamos el color de fondo de las filas al posicionar el cursor */
+tbody tr:hover { background: var(--bg-card); }
+/* Permite modificar el cursor al posicionarlo sobre una fila */
+tbody tr.clickable { cursor: pointer; }
+/* Celdas de las columnas TIPO, AH, RI y TMAX */
+.td-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent-red);
+}
+/* Celdas de la columna BATERÍA */
+.td-qr {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent-cyan);
+}
+/* Celdas de la columna SOH */
+.td-soh { color: var(--accent-green); font-size: 10px; }
+
+/* Encabezado de los paneles donde están las tablas */
+.panel-header {
+    display: flex;  /* Contenedor flex */
+    justify-content: space-between;  /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+    align-items: center;  /* Alineación de los ítems a lo largo del eje secundario (alineación central) */
+    margin-bottom: 12px;
+}
+/* Margen inferior 0 para el encabezado y el título de los paneles donde están las tablas */
+.panel-header .panel-title { margin-bottom: 0; }
+/* Contenedor que agrupa los botones para realizar acciones sobre la tabla */
+.panel-actions { display: flex; gap: 6px; align-items: center; }
+
+/* Filter select */
+/* Lista desplegable para filtrar las baterías en la tabla */
+.filter-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 4px 6px;
+    border-radius: 4px;  /* Borde redondeado */
+    outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+}
+
+/* Enlace para exportar el historial de ciclos en formato CSV (está dentro de un botón) */
+#exportar-csv {
+    text-decoration:none; 
+    color:var(--text-primary);
+}
+
+/* --- MODAL --- */
+/* Pantallas que se muestran por encima de la pantalla principal al presionar ciertos botones ("Escanear" y "Ver") */
+.modal-overlay {
+    display: none;  /* Ocultamos la pantalla por defecto */
+    position: fixed;  /* Posición fija relativa al viewport (ventana gráfica) */
+    top: 0; left: 0; right: 0; bottom: 0;  /* Hacemos que los bordes de esta pantalla se encuentren pegados a los bordes del contenedor padre (body) */
+    background: rgba(0,0,0,0.7);  /* Color de fondo negro, con opacidad 0.7 */
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+}
+/* La pantalla pasa a ser un contenedor flex cuando se abre */
+.modal-overlay.open { display: flex; }
+/* Ventana dentro de la pantalla que se muestra por encima de la pantalla principal */ 
+.modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 90%;  /* Ancho del 90% relativo al contenedor padre */
+    max-width: 720px;  /* Ancho máximo de 720px */
+    max-height: 85vh;  /* Altura máxima de 85% de la altura del viewport */
+    overflow-y: auto;  /* Permite agregar una barra de scrolleo cuando el contenido de la ventana sobrepasa los bordes superior e inferior de la misma */
+    padding: 24px;
+}
+/* Ventana dentro de la pantalla que se muestra por encima de la pantalla principal al presionar el botón "Escanear" */
+.modal.qr {
+    max-width: 440px; 
+    text-align: center;
+}
+
+/* Personalizamos la apariencia de la barra de scrolleo de las ventanas .modal */
+.modal::-webkit-scrollbar { width: 4px; }
+.modal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* Contenedor que agrupa el título y el botón de cerrar */
+.modal-header {
+    display: flex;  /* Contenedor flex */
+    justify-content: space-between;  /* Alineación de los ítems a lo largo del eje primario (espacio entre líneas) */
+    align-items: center;  /* Alineación de los ítems a lo largo del eje secundario (alineación central) */
+    margin-bottom: 20px;
+}
+/* Título de la ventana */
+.modal-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+}
+/* Botón de cerrar */
+.modal-close {
+    background: none;  /* Sin propiedades de bondo */
+    border: none;  /* Sin bordes */
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;  /* Cambia la forma del cursor al posicionarlo sobre el botón */
+    padding: 4px;
+    line-height: 1;  /* Altura de un renglón (igual al tamaño de la fuente) */
+}
+/* Cambiamos el color del botón al posicionar el cursor */
+.modal-close:hover { color: var(--text-primary); }
+/* Contenedor que agrupa las tarjetas de la pantalla que se abre al presionar el botón "Ver" ubicado en la tabla de inventario */
+.modal-stats {
+    display: grid;  /* Contenedor grid */
+    grid-template-columns: repeat(3, 1fr);  /* Permite ubicar las tres tarjetas en una misma fila */
+    gap: 10px;
+    margin-bottom: 20px;
+}
+/* Tarjetas que muestran valores de total de ciclos, último SOH y última RI */
+.modal-stat {
+    background: var(--bg-card);
+    border-radius: 6px;
+    padding: 12px;
+    text-align: center;
+}
+/* Nombre de la variable en la tarjeta */
+.modal-stat .metric-label { margin-bottom: 4px; }
+/* Valor de la variable de la tarjeta */
+.modal-stat .metric-value { font-size: 16px; }
+
+/* Contenedor del gráfico */
+.modal-chart { 
+    height: 200px;  /* Altura fija de 200px */
+    margin-bottom: 20px;  /* Margen inferior */
+}
+/* Contenedor de la tabla que se encuentra por debajo del gráfico */
+.modal-table-wrap { 
+    max-height: 200px;  /* Altura máxima de 200px */
+    overflow-y: auto;  /* Permite agregar una barra de scrolleo cuando el contenido de la tabla sobrepasa los bordes superior e inferior de la misma */
+}
+/* Personalizamos la apariencia de la barra de scrolleo de la tabla */
+.modal-table-wrap::-webkit-scrollbar { width: 4px; }
+.modal-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Contenedor del mensaje que se muestra en la pantalla que se abre al presionar "Escanear" (anteriormente mostraba los fotogramas de la cámara) */
+#modal-qr-container {
+    position: relative; 
+    width: 100%; 
+    padding: 28px 16px; 
+    background: var(--bg-base); 
+    border-radius: var(--radius); 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 14px; 
+    border: 1px solid var(--border);
+}
+
+/* Ícono de la cámara */
+#camera-icon { font-size: 40px; }
+/* Símbolo de cargando (gira indefinidamente) */
+#load-icon {
+    width: 16px; 
+    height: 16px; 
+    border: 3px solid var(--border); 
+    border-top: 3px solid var(--accent-cyan); 
+    border-radius: 50%; 
+    animation: spin 1s linear infinite;
+}
+/* Contenedor del subtítulo "Lector activo en la ESP32-CAM" */
+#modal-qr-subheader {
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    color: var(--accent-cyan);
+}
+
+/* Subtítulo "Lector activo en la ESP32-CAM" */
+#modal-qr-subtitle {
+    font-size: 14px; 
+    font-weight: 600;
+}
+/* Texto que se encuentra debajo del subtítulo "Lector activo en la ESP32-CAM" */
+#modal-qr-text {
+    font-size: 13px; 
+    color: var(--text-secondary); 
+    max-width: 320px; 
+    line-height: 1.4;
+}
+
+/* Contenedor del botón Cancelar */
+#cancel-btn-container {
+    margin-top: 16px; 
+    display: flex; 
+    justify-content: center;
+}
+/* Botón cancelar */
+.btn-sm.cancel-btn {
+    background: var(--bg-card); 
+    color: var(--text-muted); 
+    border: 1px solid var(--border); 
+    padding: 8px 18px;
+}
+
+/* Regla que permite controlar los pasos en una secuencia de animación. En este caso, la usamos para que la ruedita
+que indica que se está estableciendo la conexión con la ESP-CAM gire */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

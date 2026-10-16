@@ -562,17 +562,6 @@ def exportar_csv():
     # web o debe ser descargado como attachment localmente. En este caso, el contenido debe ser descargado
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=reporte_baterias.csv"})
 
-"""Montamos una subaplicación llamada /web dentro de la aplicación principal. En este caso, esta subaplicación nos permitirá servir 
-archivos estáticos mediante StaticFiles (index.html). Esto es útil en proyectos donde FastAPI funciona como backend y al mismo tiempo entrega
-el frontend """
-app.mount("/web", StaticFiles(directory="frontend"), name="frontend")
-
-# Ruta correspondiente a la página principal 
-@app.get("/")
-def serve_home():
-    # Devolvemos un archivo como respuesta (en este caso, el archivo correspondiente a la página principal)
-    return FileResponse("frontend/index.html")
-
 # Ruta para acceder al estado actual del sistema
 @app.get("/estado_actual")
 def obtener_estado(response: Response):
@@ -625,3 +614,7 @@ def obtener_estado(response: Response):
     else:
         ciclo_activo["esp32_online"] = False  # Indica que se perdió la conexión con el ESP32
     return ciclo_activo
+
+# Servimos el front-end (página web) ubicado en el directorio frontend
+# Esto significa que FastAPI funciona como backend y al mismo tiempo entrega el frontend
+app.frontend("/", directory="frontend")
