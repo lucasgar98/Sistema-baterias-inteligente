@@ -19,10 +19,12 @@ lv_obj_t * ta_mqtt_pass;  // Contraseña MQTT
 lv_obj_t * ta_corte_carga;  // Tensión de corte de carga
 lv_obj_t * ta_corte_descarga;  // Tensión de corte de descarga
 lv_obj_t * ta_corriente_lim;  // Límite de corriente
+lv_obj_t * ta_ciclos_auto;  // Cantidad de ciclos a ejecutar en Test Auto
 // Otros objetos
 lv_obj_t * dd_perfil;  // Lista desplegable para seleccionar el perfil de la batería
 lv_obj_t * btn_stop; // Botón de parada (global para control dinámico)
 lv_obj_t * btn_scan_qr;  // Botón para solicitar escaneo de código QR
+lv_obj_t * lbl_btn_scan; // Texto dentro del botón de escaneo
 lv_obj_t * overlay_error; // Panel de alerta crítica
 
 // --- CONECTIVIDAD ON-DEMAND ---
@@ -100,7 +102,7 @@ static void ta_qr_event_cb(lv_event_t * e) {
     // Obtenemos el objeto al cual se envía el evento (textarea)
     lv_obj_t * ta = (lv_obj_t *)lv_event_get_target(e);
     // Obtenemos el puntero pasado como último parámetro de lv_obj_add_event_cb 
-    lv_obj_t * kb = (lv_obj_t *)lv_event_get_user_data(e);/
+    lv_obj_t * kb = (lv_obj_t *)lv_event_get_user_data(e);
     if(code == LV_EVENT_FOCUSED) {  // Evento que se dispara cuando el usuario toca algún campo de texto
         // Asociamos el teclado con el campo de texto enfocado
         lv_keyboard_set_textarea(kb, ta);
@@ -124,6 +126,19 @@ static void ta_qr_event_cb(lv_event_t * e) {
         Serial2.print("\n");
     }
 }
+
+// --- FUNCIONES DE FEEDBACK VISUAL PARA ESCANEO QR ---
+void ui_set_scan_btn_state(const char * txt, uint32_t bg_color) {
+    if (lbl_btn_scan && btn_scan_qr) {
+        lv_label_set_text(lbl_btn_scan, txt);
+        lv_obj_set_style_bg_color(btn_scan_qr, lv_color_hex(bg_color), 0);
+    }
+}
+
+void ui_reset_scan_btn(void) {
+    ui_set_scan_btn_state("SCAN", 0x0284c7);
+}
+
 // Función que inicializa la interfaz gráfica. Crea los objetos de la interfaz, fija sus propiedades y los posiciona en la pantalla
 void ui_init(void) {
     // 1. INICIALIZAR ESTILOS
@@ -207,28 +222,33 @@ void ui_init(void) {
     lv_obj_add_style(card_qr, &style_card, 0);
     // Alineamos el objeto a la izquierda y hacia arriba y lo posicionamos en la pantalla
     lv_obj_align(card_qr, LV_ALIGN_TOP_LEFT, 165, 115);  // Posición x=165px, y=115px
-    // Deshabilitamos la bandera "LV_OBJ_FLAG_SCROLLABLE" para que el objeto no sea scrolleable
+    // Deshabilitamos el desplazamiento y ocultamos barras de scroll para evitar desbordes
     lv_obj_clear_flag(card_qr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(card_qr, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_pad_all(card_qr, 3, 0);
 
     // Creamos un título para la tarjeta QR (hijo de la tarjeta)
     lv_obj_t * lbl_qr_title = lv_label_create(card_qr);
-    lv_label_set_text(lbl_qr_title, "QR BATERÍA");
+    lv_label_set_text(lbl_qr_title, "QR BATERIA");
     // Asignamos fuente y color al título
     lv_obj_set_style_text_font(lbl_qr_title, &lv_font_montserrat_12, 0);  // Montserrat 12px
     lv_obj_set_style_text_color(lbl_qr_title, lv_color_hex(0x9ca3af), 0);  // Color #9CA3AF (gris claro)
     // Alineamos el título a la izquierda y hacia arriba y lo posicionamos en la pantalla
-    lv_obj_align(lbl_qr_title, LV_ALIGN_TOP_LEFT, -5, -5);
+    lv_obj_align(lbl_qr_title, LV_ALIGN_TOP_LEFT, 0, 0);
 
     // Creamos un campo de texto para que el usuario pueda ingresar manualmente el QR (hijo de la tarjeta)
     ta_main_qr = lv_textarea_create(card_qr);
-    // Fijamos el tamaño del campo de texto (ajustado a 82px para dejar lugar al botón SCAN)
-    lv_obj_set_size(ta_main_qr, 82, 25);  // Ancho 82px, alto 25px
-    // Alineamos el campo de texto a la izquierda y hacia abajo y lo posicionamos
-    lv_obj_align(ta_main_qr, LV_ALIGN_BOTTOM_LEFT, -10, 5);
+    // Fijamos el tamaño del campo de texto (82px)
+    lv_obj_set_size(ta_main_qr, 82, 22);  // Ancho 82px, alto 22px
+    // Alineamos el campo de texto a la izquierda y hacia abajo
+    lv_obj_align(ta_main_qr, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     // Fijamos el texto que se mostrará cuando el campo de texto esté vacío
-    lv_textarea_set_placeholder_text(ta_main_qr, "Ingresar QR");
+    lv_textarea_set_placeholder_text(ta_main_qr, "QR");
     // Hacemos que el campo de texto sea de una sola línea
     lv_textarea_set_one_line(ta_main_qr, true);
+    // Deshabilitamos scroll en el textarea para evitar barras innecesarias
+    lv_obj_clear_flag(ta_main_qr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(ta_main_qr, LV_SCROLLBAR_MODE_OFF);
     // Asignamos estilos al campo de texto
     lv_obj_set_style_bg_opa(ta_main_qr, LV_OPA_TRANSP, 0);  // Opacidad de fondo (LV_OPA_TRANSP = totalmente transparente)
     lv_obj_set_style_border_width(ta_main_qr, 0, 0);  // Ancho de borde 0px
@@ -238,13 +258,13 @@ void ui_init(void) {
 
     // Botón SCAN para activar el lector físico de la ESP32-CAM por comando serie
     btn_scan_qr = lv_btn_create(card_qr);
-    lv_obj_set_size(btn_scan_qr, 48, 24);  // Ancho 48px, alto 24px
-    lv_obj_align(btn_scan_qr, LV_ALIGN_BOTTOM_RIGHT, 10, 5);
+    lv_obj_set_size(btn_scan_qr, 50, 22);  // Ancho 50px, alto 22px
+    lv_obj_align(btn_scan_qr, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_set_style_bg_color(btn_scan_qr, lv_color_hex(0x0284c7), 0);  // Color azul cian
     lv_obj_set_style_radius(btn_scan_qr, 6, 0);  // Radio 6px
     lv_obj_set_style_pad_all(btn_scan_qr, 0, 0);  // Padding 0px
     lv_obj_add_event_cb(btn_scan_qr, [](lv_event_t * e){ accion_escanear_qr(); }, LV_EVENT_CLICKED, NULL);
-    lv_obj_t * lbl_btn_scan = lv_label_create(btn_scan_qr);
+    lbl_btn_scan = lv_label_create(btn_scan_qr);
     lv_label_set_text(lbl_btn_scan, "SCAN");
     lv_obj_set_style_text_font(lbl_btn_scan, &lv_font_montserrat_12, 0);
     lv_obj_center(lbl_btn_scan);
@@ -256,7 +276,7 @@ void ui_init(void) {
     lv_obj_set_size(card_estado, 300, 35); // Ancho 300px, alto 35px
     // Asignamos a la tarjeta el estilo creado para las tarjetas
     lv_obj_add_style(card_estado, &style_card, 0);
-    // Alineamos la tarjeta a la izquierda y hacia arriba y la posicionamos en pantalla
+    // Alineamos la tarjeta a la izquierda y hacia arriba y lo posicionamos en pantalla
     lv_obj_align(card_estado, LV_ALIGN_TOP_LEFT, 10, 165);  // Posición x=10px, y=165px
     // Deshabilitamos la bandera "LV_OBJ_FLAG_SCROLLABLE" para que el objeto no sea scrolleable
     lv_obj_clear_flag(card_estado, LV_OBJ_FLAG_SCROLLABLE);
@@ -290,9 +310,8 @@ void ui_init(void) {
     // Fijamos el color de fondo del botón
     lv_obj_set_style_bg_color(btn_test, lv_color_hex(0x2563eb), 0);  // Color #2563EB (azul)
     // Agregamos la función callback que se ejecutará cuando se dispare el evento de presionado del botón ("LV_EVENT_CLICKED")
-    // La función callback se implementa como una función lambda, que es una característica propia de C++ para ahorrar código
-    // Cuando se presiona el botón, enviamos el comando "START_AUTO" al ESP32 maestro a través del UART2, para iniciar el modo automático
-    lv_obj_add_event_cb(btn_test, [](lv_event_t * e){ Serial2.print("START_AUTO\n"); }, LV_EVENT_CLICKED, NULL);
+    // Cuando se presiona el botón, se llama a accion_iniciar_auto() para enviar START_AUTO con la cantidad de ciclos configurada
+    lv_obj_add_event_cb(btn_test, [](lv_event_t * e){ accion_iniciar_auto(); }, LV_EVENT_CLICKED, NULL);
     
     // Creamos la etiqueta del botón (hija del botón), le asignamos el texto "AUTO" y lo centramos
     lv_obj_t * lt = lv_label_create(btn_test); lv_label_set_text(lt, "AUTO"); lv_obj_center(lt);
@@ -364,7 +383,7 @@ void ui_init(void) {
 
     // Creamos el título (hijo del contenedor)
     lv_obj_t * title_cfg_bat = lv_label_create(cont_cfg_bat);
-    lv_label_set_text(title_cfg_bat, "PARÁMETROS DE BATERÍA");
+    lv_label_set_text(title_cfg_bat, "PARAMETROS DE BATERIA");
     // Asignamos fuente al texto
     lv_obj_set_style_text_font(title_cfg_bat, &lv_font_montserrat_14, 0);  // Montserrat 14px
     // Alineamos el título con la mitad superior
@@ -436,12 +455,26 @@ void ui_init(void) {
     // Hacemos que el campo de texto sea de una sola línea
     lv_textarea_set_one_line(ta_corriente_lim, true);
 
+    // Creamos un título para la cantidad de ciclos del test automático
+    lv_obj_t * lbl_ciclos_auto = lv_label_create(cont_cfg_bat);
+    lv_label_set_text(lbl_ciclos_auto, "Ciclos Test Auto (N):");
+    lv_obj_set_style_text_font(lbl_ciclos_auto, &lv_font_montserrat_12, 0);
+    lv_obj_align(lbl_ciclos_auto, LV_ALIGN_TOP_LEFT, 10, 215);
+
+    // Creamos un campo de texto para definir la cantidad de ciclos del test automático
+    ta_ciclos_auto = lv_textarea_create(cont_cfg_bat);
+    lv_obj_set_size(ta_ciclos_auto, 120, 35);
+    lv_obj_align(ta_ciclos_auto, LV_ALIGN_TOP_LEFT, 150, 205);
+    lv_textarea_set_placeholder_text(ta_ciclos_auto, "1");
+    lv_textarea_set_text(ta_ciclos_auto, "1");
+    lv_textarea_set_one_line(ta_ciclos_auto, true);
+
     // Creamos un botón para guardar la configuración de la batería (hijo de cont_cfg_bat)
     lv_obj_t * btn_save_bat = lv_btn_create(cont_cfg_bat);
     // Fijamos el tamaño del botón
     lv_obj_set_size(btn_save_bat, 160, 35);  // Ancho 160px, alto 35px
     // Alineamos el botón a la mitad superior y lo posicionamos tomando esa referencia
-    lv_obj_align(btn_save_bat, LV_ALIGN_TOP_MID, 0, 210);  // 210px hacia abajo
+    lv_obj_align(btn_save_bat, LV_ALIGN_TOP_MID, 0, 255);  // 255px hacia abajo
     // Fijamos el color del botón
     lv_obj_set_style_bg_color(btn_save_bat, lv_color_hex(0x9333ea), 0);  // Color #9333EA (violeta)
     // Creamos la etiqueta del botón (hijo del botón) y fijamos el texto
@@ -460,6 +493,7 @@ void ui_init(void) {
     lv_obj_add_event_cb(ta_corte_carga, ta_event_cb, LV_EVENT_ALL, kb);
     lv_obj_add_event_cb(ta_corte_descarga, ta_event_cb, LV_EVENT_ALL, kb);
     lv_obj_add_event_cb(ta_corriente_lim, ta_event_cb, LV_EVENT_ALL, kb);
+    lv_obj_add_event_cb(ta_ciclos_auto, ta_event_cb, LV_EVENT_ALL, kb);
 
     // --- PANTALLA DE CONFIGURACIÓN DE RED ---
     // Creamos el contenedor de todos los objetos para la configuración de red (hijo del tile de configuración de red)
@@ -474,7 +508,7 @@ void ui_init(void) {
 
     // Creamos el título de la pantalla de configuración de red (hijo del contenedor)
     lv_obj_t * title_cfg_net = lv_label_create(cont_cfg_net);
-    lv_label_set_text(title_cfg_net, "CONEXIÓN WI-FI / MQTT");
+    lv_label_set_text(title_cfg_net, "CONEXION WI-FI / MQTT");
     // Fijamos la fuente del texto
     lv_obj_set_style_text_font(title_cfg_net, &lv_font_montserrat_14, 0);  // Montserrat 14px
     // Alineamos el objeto a la mitad superior, y lo posicionamos
@@ -628,7 +662,7 @@ void ui_init(void) {
     // Creamos la etiqueta para el overlay_error
     lv_obj_t * lerr = lv_label_create(overlay_error);
     // Fijamos el texto
-    lv_label_set_text(lerr, "SOBRE-TEMPERATURA\nCRÍTICA PELIGRO\nSISTEMA BLOQUEADO");
+    lv_label_set_text(lerr, "SOBRE-TEMPERATURA\nCRITICA PELIGRO\nSISTEMA BLOQUEADO");
     lv_obj_set_style_text_align(lerr, LV_TEXT_ALIGN_CENTER, 0);  // Alineación central
     lv_obj_set_style_text_font(lerr, &lv_font_montserrat_20, 0);  // Fuente Montserrat 20
     lv_obj_center(lerr);  // Centramos el objeto

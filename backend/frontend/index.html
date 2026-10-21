@@ -122,9 +122,15 @@
                 <button class="btn btn-charge" id="btn-cargar" onclick="enviarComando('START_C')">CARGAR</button>
                 <!-- Botón para iniciar la descarga -->
                 <button class="btn btn-discharge" id="btn-descargar" onclick="enviarComando('START_D')">DESCARGAR</button>
-                <!-- Botón para iniciar un ciclo completo -->
-                <!-- La idea es que más adelante se puedan seleccionar el número de ciclos -->
-                <button class="btn btn-auto" id="btn-auto" onclick="enviarComando('START_AUTO')">TEST AUTO</button>
+                <!-- Botón para iniciar un ciclo completo con cantidad configurable de ciclos -->
+                <div class="auto-test-group">
+                    <button class="btn btn-auto" id="btn-auto" onclick="iniciarTestAuto()">TEST AUTO</button>
+                    <div class="cycle-stepper" title="Cantidad de ciclos N (1 a 10)">
+                        <button type="button" class="stepper-btn" onclick="modificarCiclosAuto(-1)" aria-label="Menos ciclos">−</button>
+                        <input type="number" id="input-ciclos-auto" min="1" max="10" value="1" readonly>
+                        <button type="button" class="stepper-btn" onclick="modificarCiclosAuto(1)" aria-label="Más ciclos">+</button>
+                    </div>
+                </div>
                 <!-- Botón para detener el sistema -->
                 <button class="btn btn-stop" id="btn-parar" onclick="enviarComando('STOP_ALL')">PARAR TODO</button>
             </div>
@@ -270,6 +276,12 @@
             <div class="panel-header"> <!-- Encabezado del panel -->
                 <span class="panel-title">Inventario de baterías</span> <!-- Título -->
                 <div class="panel-actions">
+                    <!-- Botón para importar baterías en JSON -->
+                    <button class="btn-sm btn-import" onclick="abrirModalImportar()">📥 Importar</button>
+                    <!-- Botón para exportar base de datos e historial a JSON -->
+                    <button class="btn-sm" onclick="exportarJSON()">📤 Exportar JSON</button>
+                    <!-- Botón para limpiar o resetear inventario -->
+                    <button class="btn-sm btn-danger-soft" onclick="confirmarLimpieza('inventario')">Limpiar Inv.</button>
                     <!-- Botón para refrescar la tabla (hace una consulta a la base de datos)-->
                     <button class="btn-sm" onclick="cargarInventario()">Refrescar</button>
                 </div>
@@ -278,9 +290,10 @@
                 <table>
                     <thead><tr> <!-- Encabezados de la tabla -->
                         <th>QR</th>
+                        <th>Estado Inicial (Pack)</th>
                         <th>Fecha registro</th>
                         <th>Ciclos</th>
-                        <th></th>
+                        <th>Acciones</th>
                     </tr></thead>
                     <tbody id="tbody-inventario"></tbody> <!-- Cuerpo (contenido) de la tabla -->
                 </table>
@@ -300,6 +313,8 @@
                     <button class="btn-sm">
                         <a href="/exportar" id="exportar-csv">CSV</a>
                     </button>
+                    <!-- Botón para limpiar historial de ciclos -->
+                    <button class="btn-sm btn-danger-soft" onclick="confirmarLimpieza('ciclos')">Limpiar Historial</button>
                     <!-- Botón para refrescar la tabla -->
                     <button class="btn-sm" onclick="cargarHistorial()">Refrescar</button>
                 </div>
@@ -329,7 +344,7 @@
             <h2 id="modal-titulo">Batería: ---</h2>  <!-- Título -->
             <button class="modal-close" onclick="cerrarModal()">&times;</button> <!-- Ícono de cerrar -->
         </div>
-        <div class="modal-stats" id="modal-stats"></div> <!-- Contenedor que agrupa las tarjetas Total ciclos, último SoH y última RI -->
+        <div class="modal-stats" id="modal-stats"></div> <!-- Contenedor que agrupa las tarjetas Total ciclos, último SoH, última RI y Estado Inicial -->
         <div class="panel-title">Tendencia SoH</div>  <!-- Título del gráfico de SoH -->
         <div class="modal-chart">  <!-- Contenedor para el gráfico -->
             <canvas id="chartTendencia"></canvas>  <!-- Gráfico de SoH -->
@@ -372,6 +387,81 @@
         </div>
         <div id="cancel-btn-container">
             <button class="btn-sm cancel-btn" onclick="cerrarModalCamara()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Editar Batería -->
+<div class="modal-overlay" id="modal-editar">
+    <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+            <h2>Editar Batería</h2>
+            <button class="modal-close" onclick="cerrarModalEditar()">&times;</button>
+        </div>
+        <form id="form-editar-bateria" onsubmit="guardarEdicionBateria(event)" style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+            <input type="hidden" id="edit-qr-original">
+            <div>
+                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Código QR / ID</label>
+                <input type="text" id="edit-qr-nuevo" required style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-family: monospace;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Estado Inicial (al salir del Pack)</label>
+                <input type="text" id="edit-estado-inicial" placeholder="Ej: 0.8V sulfatada / Recuperada / Buena" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Estado Operativo General</label>
+                <select id="edit-estado-general" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+                    <option value="OPERATIVO">OPERATIVO</option>
+                    <option value="DEGRADADA">DEGRADADA</option>
+                    <option value="DESCARTE">DESCARTE</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button type="button" class="btn-sm" onclick="cerrarModalEditar()">Cancelar</button>
+                <button type="submit" class="btn-sm btn-charge" style="padding: 6px 16px;">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: Importar Baterías JSON -->
+<div class="modal-overlay" id="modal-importar">
+    <div class="modal" style="max-width: 580px;">
+        <div class="modal-header">
+            <h2>Importar Baterías (JSON)</h2>
+            <button class="modal-close" onclick="cerrarModalImportar()">&times;</button>
+        </div>
+        <div style="margin-top: 10px; font-size: 0.85rem; color: #94a3b8;">
+            Podés cargar un archivo <code>.json</code> o pegar el texto directamente.
+            <br>Formatos admitidos:
+            <ul style="margin: 6px 0 10px 18px; font-family: monospace; font-size: 0.8rem; color: #38bdf8;">
+                <li>["BAT-01", "BAT-02", "BAT-03"]</li>
+                <li>[{"qr": "BAT-01", "estado_inicial": "0.9V sulfatada"}, ...]</li>
+            </ul>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <input type="file" id="file-importar-json" accept=".json" onchange="procesarArchivoImportar(event)" style="font-size: 0.85rem; color: #94a3b8;">
+        </div>
+        <textarea id="textarea-importar-json" rows="8" placeholder='Pegá el JSON aquí...' style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
+        <div id="import-msg-feedback" style="margin-top: 8px; font-size: 0.85rem; display: none;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+            <button type="button" class="btn-sm" onclick="cerrarModalImportar()">Cerrar</button>
+            <button type="button" class="btn-sm btn-import" style="padding: 6px 16px;" onclick="ejecutarImportacion()">Importar al Banco</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Confirmar Acción Crítica -->
+<div class="modal-overlay" id="modal-confirmar">
+    <div class="modal" style="max-width: 440px;">
+        <div class="modal-header">
+            <h2 id="modal-confirm-titulo">Confirmar Acción</h2>
+            <button class="modal-close" onclick="cerrarModalConfirmar()">&times;</button>
+        </div>
+        <p id="modal-confirm-mensaje" style="margin: 15px 0 20px 0; font-size: 0.9rem; color: #cbd5e1; line-height: 1.4;"></p>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn-sm" onclick="cerrarModalConfirmar()">Cancelar</button>
+            <button type="button" class="btn-sm btn-danger" id="btn-confirm-action" style="padding: 6px 16px;">Confirmar</button>
         </div>
     </div>
 </div>

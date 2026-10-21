@@ -83,11 +83,35 @@ void accion_iniciar_carga() { Serial2.print("START_C\n"); }  // Envía el comand
 void accion_iniciar_descarga() { Serial2.print("START_D\n"); }  // Envía el comando de inicio de descarga
 void accion_parar_todo() { Serial2.print("STOP_ALL\n"); }  // Envía el comando de parada
 
+// Temporizador para restaurar el texto y color del botón de escaneo a "SCAN"
+unsigned long scan_btn_timer = 0;
+
+// Acción para iniciar el test automático con cantidad configurable de ciclos
+void accion_iniciar_auto() {
+  int ciclos = 1;
+  if (ta_ciclos_auto) {
+    const char * txt = lv_textarea_get_text(ta_ciclos_auto);
+    if (txt && strlen(txt) > 0) {
+      int val = atoi(txt);
+      if (val > 0) ciclos = val;
+    }
+  }
+  Serial2.printf("START_AUTO:%d\n", ciclos);
+}
+
+// Acción para enviar al Master el cambio de perfil de batería seleccionado
+void accion_cambiar_perfil() {
+  char buf[32];
+  lv_dropdown_get_selected_str(dd_perfil, buf, sizeof(buf));
+  Serial2.printf("SET_PROFILE:%s\n", buf);
+}
+
 // Acción para solicitar el escaneo de código QR a la ESP32-CAM a través del Master
 void accion_escanear_qr() {
   Serial2.print("START_SCAN\n");
   lv_textarea_set_text(ta_main_qr, "Escaneando...");
   lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0x38bdf8), 0);  // Color celeste indicando escaneo activo
+  ui_set_scan_btn_state("BUSC...", 0xf59e0b);  // Botón ámbar indicando búsqueda en curso
 }
 
 // Función que guarda la configuración de acuerdo a lo ingresado por el usuario en la pantalla
@@ -437,10 +461,22 @@ void procesar_comando_recibido(String json_str) {
       if (status == "TIMEOUT") {
         lv_textarea_set_text(ta_main_qr, "TIMEOUT");
         lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xef4444), 0);  // Rojo si hubo timeout
+        ui_set_scan_btn_state("TIME", 0xef4444);  // Indicación de timeout en el botón
+        scan_btn_timer = millis() + 2000;
       } else if (status == "SCANNING") {
         lv_textarea_set_text(ta_main_qr, "Escaneando...");
         lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0x38bdf8), 0);  // Celeste durante escaneo
+        ui_set_scan_btn_state("BUSC...", 0xf59e0b);
       }
+    }
+    // Recepción directa de nuevo código QR desde el Master
+    else if (json_str.startsWith("SET_QR:")) {
+      String qrcode = json_str.substring(7);
+      qrcode.trim();
+      lv_textarea_set_text(ta_main_qr, qrcode.c_str());
+      lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xfbbf24), 0);
+      ui_set_scan_btn_state("OK", 0x22c55e);  // Confirmación de éxito en verde
+      scan_btn_timer = millis() + 2000;
     }
     
     // 3. Procesar paquete de Telemetría (JSON)
@@ -481,6 +517,11 @@ void procesar_comando_recibido(String json_str) {
         // Pisamos con el QR real si el usuario no está editándolo
         // Si el usuario estuviera editando el campo de texto, estaría en el estado "LV_STATE_FOCUSED"
         if (!lv_obj_has_state(ta_main_qr, LV_STATE_FOCUSED)) {
+            // Si el botón estaba buscando y llegó un QR detectado válido
+            if (lbl_btn_scan && strcmp(lv_label_get_text(lbl_btn_scan), "BUSC...") == 0 && qr && strlen(qr) > 0 && strcmp(qr, "NONE") != 0 && strcmp(qr, "DESCONOCIDO") != 0) {
+                ui_set_scan_btn_state("OK", 0x22c55e);
+                scan_btn_timer = millis() + 2000;
+            }
             lv_textarea_set_text(ta_main_qr, qr);
             lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xfbbf24), 0);  // Restaurar color dorado
         }
@@ -524,6 +565,12 @@ void loop() {
   if (millis() - last_print > 5000) {
     Serial.println("LOOP: ejecutandose (heartbeat)...");
     last_print = millis();
+  }
+
+  // Restauración automática del botón de escaneo a "SCAN" tras expiración del temporizador
+  if (scan_btn_timer > 0 && millis() > scan_btn_timer) {
+    ui_reset_scan_btn();
+    scan_btn_timer = 0;
   }
 
   // Lectura no bloqueante del Serial2

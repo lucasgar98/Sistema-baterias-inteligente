@@ -297,6 +297,24 @@ async function enviarComando(accion) {
     } catch(e) { console.error('Error comando:', e); }
 }
 
+// Función para modificar la cantidad de ciclos del Test Auto mediante los botones del stepper (+ / -)
+function modificarCiclosAuto(delta) {
+    const input = document.getElementById('input-ciclos-auto');
+    if (!input) return;
+    let actual = parseInt(input.value) || 1;
+    let nuevo = actual + delta;
+    if (nuevo < 1) nuevo = 1;
+    if (nuevo > 10) nuevo = 10;
+    input.value = nuevo;
+}
+
+// Función que inicia el ciclo automático configurable con la cantidad de repeticiones especificada
+function iniciarTestAuto() {
+    const inputCiclos = document.getElementById('input-ciclos-auto');
+    const n = inputCiclos ? parseInt(inputCiclos.value) || 1 : 1;
+    enviarComando(`START_AUTO:${n}`);
+}
+
 // Función que se ejecuta cuando cambia el perfil en la lista desplegable del panel izquierdo
 async function cambiarPerfil(tipo) {
     if (!tipo) return;  // Si no se selecciona ningún perfil, finalizamos la ejecución de la función
@@ -536,8 +554,8 @@ async function actualizarEstado() {
 // botón "Refrescar" y también cuando el sistema pasa al estado de reposo
 async function cargarInventario() {
     try {
-        // Hacemos una consulta GET a la ruta /baterias y obtenemos la respuesta en formato JSON
-        const r = await fetch(`${API}/baterias`);
+        // Hacemos una consulta GET a la ruta /baterias y obtenemos la respuesta en formato JSON (evitando caché)
+        const r = await fetch(`${API}/baterias?_=${Date.now()}`);
         const bats = await r.json();
         // Obtenemos el cuerpo de la tabla de inventario y la lista desplegable que permite filtrar por QR
         // que se encuentra por encima de la tabla de historial de ciclos
@@ -548,23 +566,32 @@ async function cargarInventario() {
         tbody.innerHTML = '';  // Quitamos temporalmente el contenido de la tabla
         // Update filter options
         // Recorremos el array de baterías recibido y extraemos los QRs
-        const qrs = bats.map(b => b.qr_id);
+        const qrs = (bats || []).map(b => b.qr_id);
         // Actualizamos la lista desplegable agregando todas las baterías recibidas
         filtro.innerHTML = '<option value="">Todas</option>' + qrs.map(q =>
             `<option value="${q}" ${q === filtroActual ? 'selected' : ''}>${q}</option>`
         ).join('');
         // Recorremos el array de baterías recibido y actualizamos la tabla de inventario
-        for (const bat of bats) {
+        for (const bat of (bats || [])) {
             const tr = document.createElement('tr');  // Creamos una fila
             tr.className = 'clickable';  // Agregamos a la fila la clase "clickable" para agregar un estilo de CSS
             // Al hacer click sobre alguna de las filas, se muestra una ventana con el detalle de esa batería
             tr.onclick = () => verDetalle(bat.qr_id);
-            // Agregamos los valores recibidos a la tabla
+            const estInicial = bat.estado_inicial || 'Sin especificar';
+            const estGeneral = bat.estado_general || 'OPERATIVO';
+            // Agregamos los valores recibidos a la tabla con acciones Ver, Editar y Borrar
             tr.innerHTML = `
                 <td class="td-qr">${bat.qr_id}</td>
+                <td class="td-mono" style="font-size:11px; color:var(--text-secondary); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${estInicial}">${estInicial}</td>
                 <td class="td-mono">${bat.fecha_registro ? new Date(bat.fecha_registro).toLocaleDateString('es-AR') : '—'}</td>
                 <td class="td-mono">${bat.ciclos_count !== undefined ? bat.ciclos_count : '—'}</td>
-                <td><button class="btn-sm" onclick="event.stopPropagation(); verDetalle('${bat.qr_id}')">Ver</button></td>
+                <td style="text-align: right;">
+                    <div style="display: flex; gap: 4px; justify-content: flex-end;">
+                        <button class="btn-sm" title="Ver detalle e historial" onclick="event.stopPropagation(); verDetalle('${bat.qr_id}')">Ver</button>
+                        <button class="btn-sm" title="Editar código o estado inicial" onclick="event.stopPropagation(); abrirModalEditar('${bat.qr_id}', '${estInicial.replace(/'/g, "\\'")}', '${estGeneral}')" style="color:var(--accent-yellow); border-color: rgba(251,191,36,0.3);">✏️</button>
+                        <button class="btn-sm" title="Eliminar batería y ciclos asociados" onclick="event.stopPropagation(); confirmarBorrado('${bat.qr_id}')" style="color:var(--accent-red); border-color: rgba(248,113,113,0.3);">🗑️</button>
+                    </div>
+                </td>
             `;
             // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
@@ -583,7 +610,8 @@ async function cargarHistorial() {
         // a la ruta /historial/{filtroQR} para obtener el hisotrial de una sola batería, mientras que si
         // no se seleccionó ningún QR, hacemos una petición a la ruta /historial para obtener el historial de
         // ciclos de todas las baterías
-        const url = filtroQR ? `${API}/historial/${encodeURIComponent(filtroQR)}` : `${API}/historial`;
+        const baseUrl = filtroQR ? `${API}/historial/${encodeURIComponent(filtroQR)}` : `${API}/historial`;
+        const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'} _=${Date.now()}`;
         // Hacemos la petición a la ruta y convertimos la respuesta a JSON
         const r = await fetch(url);
         const hist = await r.json();
@@ -591,29 +619,35 @@ async function cargarHistorial() {
         const tbody = document.getElementById('tbody-historial');
         tbody.innerHTML = '';
         // Iteramos sobre el array de ciclos recibido y actualizamos la tabla
-        hist.forEach(c => {
+        (hist || []).forEach(c => {
             const tr = document.createElement('tr');  // Creamos una fila de la tabla
             // Redondeamos el porcentaje de SoH a un decimal
-            const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
+            const sohVal = typeof c.soh_porcentaje === 'number' ? c.soh_porcentaje : 0;
+            const soh = sohVal > 0 ? sohVal.toFixed(1) + '%' : '—';
             
             // Agregamos una etiqueta a la columna TIPO en función del estado
+            const tipoStr = c.tipo_ciclo || '';
             let tipoLabel = '❓ Desconocido';
-            if (c.tipo_ciclo.includes('CARGANDO')) {
+            if (tipoStr.includes('CARGANDO')) {
                 tipoLabel = '⚡ Carga';
-            } else if (c.tipo_ciclo.includes('DESCARGANDO')) {
+            } else if (tipoStr.includes('DESCARGANDO')) {
                 tipoLabel = '🔋 Descarga';
             }
-            if (c.tipo_ciclo.includes('Interrumpido')) {
+            if (tipoStr.includes('Interrumpido')) {
                 tipoLabel += ' <span style="color:var(--accent-orange);font-size:10px;font-weight:600;">⚠️ Interr</span>';
             }
+            const capVal = typeof c.capacidad_ah === 'number' ? c.capacidad_ah : 0;
+            const riVal = typeof c.resistencia_interna === 'number' ? c.resistencia_interna : 0;
+            const tempVal = typeof c.temp_maxima === 'number' ? c.temp_maxima : 0;
+
             // Agregamos los valores recibidos a la tabla
             tr.innerHTML = `
-                <td class="td-qr">${c.qr_id}</td>
+                <td class="td-qr">${c.qr_id || '—'}</td>
                 <td class="td-mono">${tipoLabel}</td>
-                <td class="td-mono">${c.capacidad_ah.toFixed(3)}</td>
+                <td class="td-mono">${capVal.toFixed(3)}</td>
                 <td class="td-soh">${soh}</td>
-                <td class="td-mono">${Math.round(c.resistencia_interna)}</td>
-                <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
+                <td class="td-mono">${Math.round(riVal)}</td>
+                <td class="td-mono" style="color:var(--accent-red);">${tempVal.toFixed(1)}°</td>
             `;
             // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
@@ -636,8 +670,8 @@ async function verDetalle(qr) {
     document.getElementById('tbody-modal-ciclos').innerHTML = '';
 
     try {
-        // Hacemos la consulta a la ruta /bateria/{qr} y convertimos la respuesta a JSON
-        const r = await fetch(`${API}/bateria/${encodeURIComponent(qr)}`);
+        // Hacemos la consulta a la ruta /bateria/{qr} y convertimos la respuesta a JSON (evitando caché)
+        const r = await fetch(`${API}/bateria/${encodeURIComponent(qr)}?_=${Date.now()}`);
         const data = await r.json();
 
         if (data.status === 'Error') {
@@ -648,17 +682,17 @@ async function verDetalle(qr) {
         }
         // Obtenemos los valores recibidos
         const ciclos = data.ciclos || [];  // Array con el detalle de los ciclos
-        const descargas = ciclos.filter(c => c.tipo_ciclo === 'DESCARGANDO');  // Array que guarda los ciclos de descarga
+        const descargas = ciclos.filter(c => (c.tipo_ciclo || '').includes('DESC'));  // Array que guarda los ciclos de descarga
         // Último SoH y resistencia interna (en caso que haya habido una descarga)
-        const ultimoSoH = descargas.length > 0 ? descargas[0].soh_porcentaje : 0;
-        const ultimaRI = descargas.length > 0 ? descargas[0].resistencia_interna : 0;
+        const ultimoSoH = descargas.length > 0 && typeof descargas[0].soh_porcentaje === 'number' ? descargas[0].soh_porcentaje : 0;
+        const ultimaRI = descargas.length > 0 && typeof descargas[0].resistencia_interna === 'number' ? descargas[0].resistencia_interna : 0;
 
         // Stats
         // Actualizamos las tarjetas ubicadas en la parte superior de la ventana que muestra el detalle de la batería
         document.getElementById('modal-stats').innerHTML = `
             <div class="modal-stat">
                 <div class="metric-label">Total ciclos</div>
-                <div class="metric-value" style="color:var(--accent-cyan);">${data.total_ciclos}</div>
+                <div class="metric-value" style="color:var(--accent-cyan);">${data.total_ciclos || ciclos.length}</div>
             </div>
             <div class="modal-stat">
                 <div class="metric-label">Último SoH</div>
@@ -667,6 +701,10 @@ async function verDetalle(qr) {
             <div class="modal-stat">
                 <div class="metric-label">Última RI</div>
                 <div class="metric-value" style="color:var(--accent-orange);">${ultimaRI > 0 ? Math.round(ultimaRI) + ' mΩ' : '—'}</div>
+            </div>
+            <div class="modal-stat">
+                <div class="metric-label">Estado Inicial (Pack)</div>
+                <div class="metric-value small" style="color:var(--accent-yellow); font-size:12px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${data.estado_inicial || 'Sin especificar'}">${data.estado_inicial || 'Sin especificar'}</div>
             </div>
         `;
 
@@ -683,7 +721,7 @@ async function verDetalle(qr) {
                 labels: descOrden.map((_, i) => `Ciclo ${i + 1}`),  // Etiquetas del eje horizontal (ciclos)
                 datasets: [{
                     label: 'SoH %',
-                    data: descOrden.map(c => c.soh_porcentaje),  // Datos del gráfico (se obtienen del array de descargas invertido)
+                    data: descOrden.map(c => typeof c.soh_porcentaje === 'number' ? c.soh_porcentaje : 0),  // Datos del gráfico (se obtienen del array de descargas invertido)
                     borderColor: '#4ade80',  // Color del borde
                     backgroundColor: 'rgba(74,222,128,0.05)',  // Color de fondo
                     fill: true,
@@ -718,26 +756,33 @@ async function verDetalle(qr) {
             // Convertimos la fecha y hora de inicio recibida a string
             const fecha = c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
             // Expresamos el SoH como un porcentaje con un solo decimal
-            const soh = c.soh_porcentaje > 0 ? c.soh_porcentaje.toFixed(1) + '%' : '—';
+            const sohVal = typeof c.soh_porcentaje === 'number' ? c.soh_porcentaje : 0;
+            const soh = sohVal > 0 ? sohVal.toFixed(1) + '%' : '—';
             
             // Bandera que indica si hubo una carga
-            const esCarga = c.tipo_ciclo.includes('CARGANDO');  
+            const tipoStr = c.tipo_ciclo || '';
+            const esCarga = tipoStr.includes('CARGANDO');  
             // Bandera que indica si hubo una interrupción en la carga o descarga
-            const esInterrumpido = c.tipo_ciclo.includes('Interrumpido');
+            const esInterrumpido = tipoStr.includes('Interrumpido');
             // Ícono para representar el estado de carga
             const icon = esCarga ? '⚡' : '🔋';
             // Ícono para indicar si la carga fue interrumpida
             const statusIndicator = esInterrumpido ? ' ⚠️' : '';
 
+            const capVal = typeof c.capacidad_ah === 'number' ? c.capacidad_ah : 0;
+            const riVal = typeof c.resistencia_interna === 'number' ? c.resistencia_interna : 0;
+            const vFinVal = typeof c.voltaje_final === 'number' ? c.voltaje_final.toFixed(2) : '—';
+            const tempVal = typeof c.temp_maxima === 'number' ? c.temp_maxima.toFixed(1) : '—';
+
             // Agregamos los valores recibidos a la tabla
             tr.innerHTML = `
                 <td class="td-mono">${icon}${statusIndicator}</td>
                 <td class="td-mono">${fecha}</td>
-                <td class="td-mono">${c.capacidad_ah.toFixed(3)}</td>
+                <td class="td-mono">${capVal.toFixed(3)}</td>
                 <td class="td-soh">${soh}</td>
-                <td class="td-mono">${Math.round(c.resistencia_interna)}</td>
-                <td class="td-mono" style="color:var(--accent-cyan);">${c.voltaje_final ? c.voltaje_final.toFixed(2) : '—'}</td>
-                <td class="td-mono" style="color:var(--accent-red);">${c.temp_maxima.toFixed(1)}°</td>
+                <td class="td-mono">${Math.round(riVal)}</td>
+                <td class="td-mono" style="color:var(--accent-cyan);">${vFinVal}</td>
+                <td class="td-mono" style="color:var(--accent-red);">${tempVal}°</td>
             `;
             // Agregamos la fila como elemento hijo del cuerpo de la tabla
             tbody.appendChild(tr);
@@ -750,22 +795,242 @@ function cerrarModal() {
     document.getElementById('modal-detalle').classList.remove('open');
 }
 
-// Close modal on overlay click
-// Cerramos la ventana de detalle de batería al hacer click en cualquier punto fuera de la misma
+// --- MODALES: EDICIÓN, IMPORTACIÓN, CONFIRMACIÓN Y EXPORTACIÓN ---
+
+// Función para descargar en formato JSON el inventario completo y los ciclos históricos
+function exportarJSON() {
+    window.location.href = `${API}/exportar_json`;
+}
+
+// Modal Editar Batería
+function abrirModalEditar(qr, estadoInicial, estadoGeneral) {
+    document.getElementById('edit-qr-original').value = qr;
+    document.getElementById('edit-qr-nuevo').value = qr;
+    document.getElementById('edit-estado-inicial').value = (estadoInicial && estadoInicial !== 'Sin especificar') ? estadoInicial : '';
+    document.getElementById('edit-estado-general').value = estadoGeneral || 'OPERATIVO';
+    document.getElementById('modal-editar').classList.add('open');
+}
+
+function cerrarModalEditar() {
+    document.getElementById('modal-editar').classList.remove('open');
+}
+
+async function guardarEdicionBateria(e) {
+    if (e) e.preventDefault();
+    const originalQR = document.getElementById('edit-qr-original').value;
+    const nuevoQR = document.getElementById('edit-qr-nuevo').value.trim();
+    const estadoInicial = document.getElementById('edit-estado-inicial').value.trim();
+    const estadoGeneral = document.getElementById('edit-estado-general').value;
+
+    if (!nuevoQR) {
+        alert("El código QR no puede estar vacío");
+        return;
+    }
+
+    try {
+        const payload = {
+            nuevo_qr_id: nuevoQR,
+            estado_inicial: estadoInicial || "Sin especificar",
+            estado_general: estadoGeneral || "OPERATIVO"
+        };
+        const res = await fetch(`${API}/bateria/${encodeURIComponent(originalQR)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'Éxito') {
+            cerrarModalEditar();
+            cargarInventario();
+            cargarHistorial();
+        } else {
+            alert(`Error al guardar: ${data.msg || 'No se pudo actualizar'}`);
+        }
+    } catch(err) {
+        console.error("Error al actualizar batería:", err);
+        alert("Error de conexión al intentar actualizar");
+    }
+}
+
+// Modal Confirmación Genérica
+let accionConfirmar = null;
+
+function confirmarBorrado(qr) {
+    document.getElementById('modal-confirm-titulo').textContent = `Eliminar Batería ${qr}`;
+    document.getElementById('modal-confirm-mensaje').textContent = `¿Estás seguro de que deseás eliminar la batería "${qr}" y todos sus ciclos históricos asociados? Esta acción no se puede deshacer.`;
+    accionConfirmar = async () => {
+        try {
+            const res = await fetch(`${API}/bateria/${encodeURIComponent(qr)}?_=${Date.now()}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.status === 'Éxito') {
+                cerrarModalConfirmar();
+                await cargarInventario();
+                await cargarHistorial();
+            } else {
+                alert(`Error al eliminar: ${data.msg}`);
+            }
+        } catch(err) { console.error(err); }
+    };
+    document.getElementById('btn-confirm-action').onclick = accionConfirmar;
+    document.getElementById('modal-confirmar').classList.add('open');
+}
+
+function confirmarLimpieza(tipo) {
+    const titulo = tipo === 'ciclos' ? 'Limpiar Historial de Ciclos' : 'Limpiar Todo el Inventario';
+    const mensaje = tipo === 'ciclos' 
+        ? '¿Estás seguro de que deseás borrar todo el historial de ciclos? Los datos de las baterías registradas se conservarán.'
+        : '¿Estás seguro de que deseás borrar todas las baterías del inventario y todo el historial de ciclos? La base de datos quedará totalmente en blanco.';
+    
+    document.getElementById('modal-confirm-titulo').textContent = titulo;
+    document.getElementById('modal-confirm-mensaje').textContent = mensaje;
+    accionConfirmar = async () => {
+        try {
+            const res = await fetch(`${API}/limpiar_datos?tipo=${tipo}&_=${Date.now()}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.status === 'Éxito') {
+                cerrarModalConfirmar();
+                await cargarInventario();
+                await cargarHistorial();
+            } else {
+                alert(`Error al limpiar: ${data.msg}`);
+            }
+        } catch(err) { console.error(err); }
+    };
+    document.getElementById('btn-confirm-action').onclick = accionConfirmar;
+    document.getElementById('modal-confirmar').classList.add('open');
+}
+
+function cerrarModalConfirmar() {
+    document.getElementById('modal-confirmar').classList.remove('open');
+    accionConfirmar = null;
+}
+
+// Modal Importar JSON
+function abrirModalImportar() {
+    document.getElementById('textarea-importar-json').value = '';
+    const feedback = document.getElementById('import-msg-feedback');
+    feedback.style.display = 'none';
+    feedback.textContent = '';
+    const fileInput = document.getElementById('file-importar-json');
+    if (fileInput) fileInput.value = '';
+    document.getElementById('modal-importar').classList.add('open');
+}
+
+function cerrarModalImportar() {
+    document.getElementById('modal-importar').classList.remove('open');
+}
+
+function procesarArchivoImportar(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        document.getElementById('textarea-importar-json').value = evt.target.result;
+    };
+    reader.readAsText(file);
+}
+
+async function ejecutarImportacion() {
+    const texto = document.getElementById('textarea-importar-json').value.trim();
+    const feedback = document.getElementById('import-msg-feedback');
+    feedback.style.display = 'block';
+
+    if (!texto) {
+        feedback.style.color = '#ef4444';
+        feedback.textContent = 'Pegá o seleccioná un archivo JSON primero.';
+        return;
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(texto);
+    } catch(err) {
+        feedback.style.color = '#ef4444';
+        feedback.textContent = 'JSON inválido. Revisá la sintaxis del archivo.';
+        return;
+    }
+
+    // Normalizar a formato lista de objetos [{qr_id, estado_inicial, estado_general}]
+    let lista = [];
+    if (Array.isArray(parsed)) {
+        lista = parsed.map(item => {
+            if (typeof item === 'string') {
+                return { qr_id: item.trim(), estado_inicial: 'Sin especificar', estado_general: 'OPERATIVO' };
+            } else if (item && typeof item === 'object') {
+                return {
+                    qr_id: (item.qr_id || item.qr || item.id || '').trim(),
+                    estado_inicial: (item.estado_inicial || item.estado || 'Sin especificar').trim(),
+                    estado_general: (item.estado_general || 'OPERATIVO').trim()
+                };
+            }
+            return null;
+        }).filter(item => item && item.qr_id);
+    } else if (parsed && typeof parsed === 'object') {
+        const arr = parsed.inventario || parsed.baterias || [];
+        if (Array.isArray(arr)) {
+            lista = arr.map(item => ({
+                qr_id: (item.qr_id || item.qr || item.id || '').trim(),
+                estado_inicial: (item.estado_inicial || item.estado || 'Sin especificar').trim(),
+                estado_general: (item.estado_general || 'OPERATIVO').trim()
+            })).filter(item => item.qr_id);
+        }
+    }
+
+    if (lista.length === 0) {
+        feedback.style.color = '#ef4444';
+        feedback.textContent = 'No se encontraron baterías válidas en el JSON proporcionado.';
+        return;
+    }
+
+    try {
+        feedback.style.color = '#38bdf8';
+        feedback.textContent = `Importando ${lista.length} baterías...`;
+        const res = await fetch(`${API}/importar_inventario`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lista)
+        });
+        const data = await res.json();
+        if (data.status === 'Éxito') {
+            feedback.style.color = '#4ade80';
+            feedback.textContent = `¡Éxito! Insertadas: ${data.insertadas}, Actualizadas: ${data.actualizadas}.`;
+            cargarInventario();
+            setTimeout(cerrarModalImportar, 1400);
+        } else {
+            feedback.style.color = '#ef4444';
+            feedback.textContent = `Error: ${data.msg || 'No se pudo procesar la importación'}`;
+        }
+    } catch(err) {
+        feedback.style.color = '#ef4444';
+        feedback.textContent = 'Error de conexión con el servidor.';
+    }
+}
+
+// Cerramos los modales al hacer click en el fondo oscuro
 document.getElementById('modal-detalle').addEventListener('click', function(e) {
     if (e.target === this) cerrarModal();
 });
-// Cerramos la ventana de la cámara al hacer click en cualquier punto fuera de la misma
 document.getElementById('modal-camara').addEventListener('click', function(e) {
     if (e.target === this) cerrarModalCamara();
 });
+document.getElementById('modal-editar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalEditar();
+});
+document.getElementById('modal-importar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalImportar();
+});
+document.getElementById('modal-confirmar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalConfirmar();
+});
 
-// Close modal on Escape
-// Cerramos las dos ventanas al presionar la tecla escape del teclado
+// Cerrar cualquier modal abierto al presionar Escape
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         cerrarModal();
         cerrarModalCamara();
+        cerrarModalEditar();
+        cerrarModalImportar();
+        cerrarModalConfirmar();
     }
 });
 

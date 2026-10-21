@@ -13,6 +13,7 @@ extern lv_obj_t * label_ah_ri;
 extern lv_obj_t * btn_stop;
 extern lv_obj_t * overlay_error;
 extern lv_obj_t * btn_scan_qr;  // Botón para iniciar escaneo de código QR
+extern lv_obj_t * lbl_btn_scan; // Etiqueta del botón de escaneo para feedback visual
 
 // --- 2. CONFIGURACIONES DE WIFI Y MQTT ---
 extern lv_obj_t * ta_ssid;
@@ -24,6 +25,7 @@ extern lv_obj_t * dd_perfil;
 extern lv_obj_t * ta_corte_carga;
 extern lv_obj_t * ta_corte_descarga;
 extern lv_obj_t * ta_corriente_lim;
+extern lv_obj_t * ta_ciclos_auto;  // Campo para configurar cantidad de ciclos (N)
 
 // --- 3. CONECTIVIDAD ON-DEMAND ---
 extern lv_obj_t * sw_wifi;
@@ -31,12 +33,15 @@ extern lv_obj_t * sw_mqtt;
 extern lv_obj_t * label_wifi_status;
 extern lv_obj_t * label_mqtt_status;
 
-// --- 4. FUNCIÓN DE INICIALIZACIÓN ---
+// --- 4. FUNCIÓN DE INICIALIZACIÓN Y FEEDBACK ---
 void ui_init(void);
+void ui_set_scan_btn_state(const char * txt, uint32_t bg_color);
+void ui_reset_scan_btn(void);
 
 // --- 5. PROTOTIPOS DE ACCIONES ---
 extern void accion_iniciar_carga();
 extern void accion_iniciar_descarga();
+extern void accion_iniciar_auto();
 extern void accion_parar_todo();
 extern void accion_cambiar_perfil();
 extern void accion_guardar_config();

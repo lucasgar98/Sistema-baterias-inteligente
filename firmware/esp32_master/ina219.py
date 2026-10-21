@@ -25,24 +25,30 @@ class INA219:
 
     def configure(self):
         """
-        Calibración estándar para un Shunt de 0.1 Ohmios.
-        Rango de 32V, 2A Máximo. ADC a 12-bits continuo.
+        Calibración para un Shunt de 0.1 Ohmios.
+        Rango de 32V, Gain /8 (320mV).
+        Hardware averaging de 128 muestras (68.1 ms) para filtrar ripple de PWM a 500 Hz.
         """
         # 1. Enviar valor de calibración (4096 para esta configuración)
         self._write_register(self.REG_CALIBRATION, 4096)
         
-        # 2. Configurar el registro principal (0x399F = 32V, Gain /8, 12-bit)
-        self._write_register(self.REG_CONFIG, 0x399F)
+        # 2. Configurar el registro principal:
+        # 0x3FFF = 32V, Gain /8, BADC 128 samples (68 ms), SADC 128 samples (68 ms), Shunt & Bus continuo
+        self._write_register(self.REG_CONFIG, 0x3FFF)
 
     def current(self):
-        """ Retorna la corriente leída en miliAmperios (mA) """
-        val = self._read_register(self.REG_CURRENT)
+        """
+        Retorna la corriente leída en miliAmperios (mA).
+        Se lee directamente del registro de tensión del Shunt (REG_SHUNTVOLTAGE).
+        Esto evita lecturas a 0 mA si un pico de corriente reinicia el registro de calibración volátil del chip.
+        Con shunt de 0.1 Ohm y LSB de 10 uV: I [mA] = Vshunt [mV] / 0.1 = val * 0.01 / 0.1 = val / 10.0
+        """
+        val = self._read_register(self.REG_SHUNTVOLTAGE)
         
         # Corrección para números negativos (complemento a 2 de 16 bits)
         if val > 32767:
             val -= 65536
             
-        # Con el divisor de calibración 4096, cada bit equivale a 0.1 mA
         return val / 10.0
 
     def voltage(self):

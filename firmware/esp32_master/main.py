@@ -101,6 +101,13 @@ alerta_termica = False
 wifi_conectado = False
 estado_anterior_activo = False  # Indica si la batería estuvo inactiva o no (se usa para el cálculo de la capacidad)
 modo_auto = False  # Indica si está activado el modo auto (uno o varios ciclos completos de carga/descarga)
+# Variables para la detección de plateau / estancamiento de tensión (corte por saturación o dV/dt nulo)
+estado_anterior_carga = False
+estado_anterior_descarga = False
+tiempo_inicio_fase = 0
+ultimo_chequeo_estancamiento = 0
+v_ref_estancamiento = 0.0
+conteo_estancamiento = 0
 # ==== Variables asociadas con la batería ====
 bateria_qr_actual = "NINGUNA"  # Variable que guarda el QR de la batería
 perfil_actual = "NiMH-7.2V"  # Tipo de batería
@@ -110,8 +117,12 @@ inicio_espera = 0  # Instante de tiempo para iniciar una demora de 15 minutos lu
 nivelPWM = 0  # Almacena el ciclo de actividad como un número entre 0 y 1023, el cual se pasa como argumento del método PWM.duty()
 # Variable que guarda el estado del sistema en modo auto. Los posibles estados son IDLE, DESC1, WAIT1, CARGA, WAIT2 y DESC2
 paso_auto = "IDLE"
+total_ciclos_auto = 1  # Cantidad total de ciclos configurados para el test automático
+ciclo_auto_actual = 1  # Ciclo actual en ejecución del test automático
 # Variable que almacena la temperatura filtrada
 temperatura_filtrada = None
+# Variable para el filtrado suave de la tensión de la batería
+v_bat_filtrada = None
 # ==== Variables para la comunicación
 buffer_uart_tft = ""  # Buffer que almacena los caracteres recibidos de la pantalla a través del UART2 (en formato string)
 buffer_uart_cam = ""  # Buffer para guardar los caracteres recibidos de la cámara
@@ -184,7 +195,7 @@ def desconectar_mqtt():
 # --- NUEVA LÓGICA MQTT (RECIBIR CONFIG Y COMANDOS) ---
 # Función callback que se ejecuta al recibir mensajes de los tópicos MQTT
 def on_message_mqtt(topic, msg):
-    global estado_Carga, estado_Descarga, modo_auto, paso_auto, perfil_actual, bateria_qr_actual, nivelPWM
+    global estado_Carga, estado_Descarga, modo_auto, paso_auto, total_ciclos_auto, ciclo_auto_actual, perfil_actual, bateria_qr_actual, nivelPWM
     global PERFILES_LOCALES, VOLTAJE_CORTE_CARGA, VOLTAJE_CORTE_DESCARGA
     # Fijamos la codificación UTF-8 para los mensajes de los tópicos MQTT
     topic_str = topic.decode('utf-8')  # Nombre del tópico
@@ -227,9 +238,11 @@ def on_message_mqtt(topic, msg):
         # Datos recibidos del tópico comandos (órdenes de control para iniciar/detener la carga/descarga)
         # Evaluamos la orden recibida y la ejecutamos, siempre y cuando no se haya recibido un aleta térmica
         if payload == "STOP_ALL":  # Detener todo el sistema
-            # Actualizamos el estado del sistema
+            # Actualizamos el estado del sistema y reiniciamos ciclos automáticos
             modo_auto = False
             paso_auto = "IDLE"
+            ciclo_auto_actual = 1
+            total_ciclos_auto = 1
             estado_Carga = False
             estado_Descarga = False
             # Ponemos en 0 el ciclo de actividad de las señales PWM de los pines de carga y descarga para detener
@@ -251,12 +264,19 @@ def on_message_mqtt(topic, msg):
             elif payload == "START_D":  # Iniciar descarga
                 estado_Descarga = True
                 estado_Carga = False
-            elif payload == "START_AUTO":  # Iniciar el modo auto (uno o dos ciclos completos de carga/descarga)
+            elif payload == "START_AUTO" or payload.startswith("START_AUTO:"):  # Iniciar el modo auto (uno o varios ciclos completos)
+                total_ciclos_auto = 1
+                if ":" in payload:
+                    try:
+                        total_ciclos_auto = max(1, int(payload.split(":")[1]))
+                    except:
+                        total_ciclos_auto = 1
+                ciclo_auto_actual = 1
                 modo_auto = True
-                paso_auto = "DESC1"  # Estado de descarga (DESC1)
+                paso_auto = "DESC"  # Estado de descarga inicial
                 estado_Descarga = True
                 estado_Carga = False
-                print("MODO AUTO INICIADO DESDE MQTT")
+                print(f"MODO AUTO INICIADO DESDE MQTT ({total_ciclos_auto} ciclos)")
 
 # Función para iniciar la comunicación MQTT
 def iniciar_mqtt():
@@ -350,30 +370,35 @@ while True:
             except:
                 mqtt_client = None  # Desactivar MQTT roto, no crashear el loop
 
-        # 1. LECTURA DE SENSORES (50 muestras con breve delay)
+        # 1. LECTURA DE SENSORES (30 muestras no síncronas al PWM para evitar batido de frecuencia)
         tension_sum, corriente_sum = 0, 0
-        for i in range(50):
-            # Para medir la tensión de la batería, se utiliza un divisor resistivo, de manera que la tensión en la entrada
-            # analógica no supere los 3.3 V. La tensión en la entrada analógica se obtiene multiplicando el valor
-            # leído por el ADC por el factor de escala asociado al divisor resistivo. La tensión que devuelve el ADC está
-            # en uV, por ende la pasamos a V dividiéndola por 10^6
-            v_bat = (adc_bat.read_uv() / math.pow(10, 6)) * ((R7 + R8) / R8)
-            # Sumamos la tensión y la corriente de la batería
+        muestras_adc = 30
+        for i in range(muestras_adc):
+            # Tensión leída por ADC con divisor resistivo
+            v_bat = (adc_bat.read_uv() / 1000000.0) * ((R7 + R8) / R8)
             tension_sum += v_bat
             corriente_sum += ina.current()
-            sleep(0.002)  # Demora de 2 ms para dar respiro a los buses
+            sleep_us(500)  # Delay no sincrónico al ciclo de 2 ms (500 Hz) para promediar uniformemente el ciclo PWM
         # Calculamos la tensión y la corriente promedio
-        v_bat_prom = tension_sum / 50.0
-        i_bat_prom = abs(corriente_sum / 50.0) * 0.8  # i_bat_prom = abs(corriente_sum / 50.0) * 0.8
-        # Calculamos la corrección de tensión que compensa dinámicamente las lecturas de la tensión en función de la 
-        # caída de tensión introducida por shunts y cables durante la carga (-0.0001 V por mA) y descarga (+0.00015 V por mA)
-        ajuste = -0.0001 if estado_Carga else (0.00015 if estado_Descarga else 0)
+        v_bat_prom = tension_sum / float(muestras_adc)
+        # Factor 0.862 calibrado con multímetro en serie (promedio de 928 mA en carga y 944 mA en descarga)
+        i_bat_prom = abs(corriente_sum / float(muestras_adc)) * 0.862
+        # Compensación de caída de tensión en cables y bornes (ajustado con dataset real de 41 puntos):
+        # - En Carga: la placa mide +286 mV por encima de la batería -> ajuste de -0.00031 V/mA (error residual < 12 mV)
+        # - En Descarga: la placa mide -323 mV por debajo de la batería -> ajuste de +0.00035 V/mA (error residual < 40 mV)
+        ajuste = -0.00031 if estado_Carga else (0.00035 if estado_Descarga else 0.0)
         v_bat_aj = v_bat_prom + (ajuste * i_bat_prom)
-        # Si la tensión cae por debajo de 1 V o la corriente cae por debajo de 50 mA, la ponemos en 0
-        if(v_bat_aj < 1.0):
+        # Si la tensión calculada es menor a 0.7 V (700 mV), la forzamos a 0.0 V exactos.
+        if v_bat_aj < 0.7:
             v_bat_aj = 0.0
-        if(i_bat_prom < 50.0):
+        if i_bat_prom < 50.0:
             i_bat_prom = 0.0
+
+        # Filtro de suavizado (EMA) para estabilizar la lectura de tensión frente al ruido de conmutación PWM
+        if v_bat_filtrada is None or not (estado_Carga or estado_Descarga) or v_bat_aj == 0.0:
+            v_bat_filtrada = v_bat_aj
+        else:
+            v_bat_filtrada = 0.80 * v_bat_filtrada + 0.20 * v_bat_aj
         # Leemos la temperatura del termistor NTC
         temperatura = leer_temperatura()
         # 2. LÓGICA DE SEGURIDAD
@@ -543,6 +568,8 @@ while True:
                         # Cortamos la carga y la descarga y actualizamos el estado del sistema
                         modo_auto = False
                         paso_auto = "IDLE"
+                        ciclo_auto_actual = 1
+                        total_ciclos_auto = 1
                         estado_Carga = False
                         estado_Descarga = False
                         pin_Carga.duty(0)
@@ -558,23 +585,30 @@ while True:
                     
                     elif not alerta_termica:
                         nivelPWM = 0
-                        if comando_raw == "START_C" and v_bat_aj < VOLTAJE_CORTE_CARGA:  # Comando para iniciar la carga
+                        v_check = v_bat_filtrada if v_bat_filtrada is not None else v_bat_aj
+                        if comando_raw == "START_C" and v_check < VOLTAJE_CORTE_CARGA:  # Comando para iniciar la carga
                             # Si la tensión de la batería está por debajo del umbral de carga, actualizamos el estado
                             # del sistema para iniciar la carga
                             estado_Carga = True
                             estado_Descarga = False
-                        elif comando_raw == "START_D" and v_bat_aj > VOLTAJE_CORTE_DESCARGA:  # Comando para iniciar la descarga
+                        elif comando_raw == "START_D" and v_check > VOLTAJE_CORTE_DESCARGA:  # Comando para iniciar la descarga
                             # Si la tensión de la batería está por encima del umbral de descarga, actualizamos el estado
                             # del sistema para iniciar la descarga
                             estado_Descarga = True
                             estado_Carga = False
-                        elif comando_raw == "START_AUTO":  # Iniciar el modo auto (uno o dos ciclos completos de carga/descarga)
-                            # Actualizamos el estado del sistema
+                        elif comando_raw == "START_AUTO" or comando_raw.startswith("START_AUTO:"):  # Iniciar el modo auto
+                            total_ciclos_auto = 1
+                            if ":" in comando_raw:
+                                try:
+                                    total_ciclos_auto = max(1, int(comando_raw.split(":")[1]))
+                                except:
+                                    total_ciclos_auto = 1
+                            ciclo_auto_actual = 1
                             modo_auto = True
-                            paso_auto = "DESC1"  # Estado de descarga (DESC1)
+                            paso_auto = "DESC"  # Estado de descarga inicial
                             estado_Descarga = True  # Hacemos primero la descarga
                             estado_Carga = False
-                            print("MODO AUTO INICIADO")
+                            print(f"MODO AUTO INICIADO DESDE PANTALLA ({total_ciclos_auto} ciclos)")
 
         # 4. ESCUCHAR A LA CÁMARA (UART1)
         """La cámara solicita datos WiFi al maestro por UART1 al iniciar, pero dado que la idea es que la propia cámara
@@ -651,25 +685,65 @@ while True:
                                 except Exception as e:
                                     print("Error publicando IP de la cámara:", e)
 
+        # Inicialización de referencias al cambiar de fase (Carga / Descarga)
+        if estado_Carga and not estado_anterior_carga:
+            tiempo_inicio_fase = ticks_ms()
+            ultimo_chequeo_estancamiento = ticks_ms()
+            v_ref_estancamiento = v_bat_aj
+            conteo_estancamiento = 0
+            print(f"[CARGA] Inicio de fase de carga. Tensión inicial: {v_bat_aj:.2f}V")
+
+        if estado_Descarga and not estado_anterior_descarga:
+            tiempo_inicio_fase = ticks_ms()
+            ultimo_chequeo_estancamiento = ticks_ms()
+            v_ref_estancamiento = v_bat_aj
+            conteo_estancamiento = 0
+            print(f"[DESCARGA] Inicio de fase de descarga. Tensión inicial: {v_bat_aj:.2f}V")
+
+        estado_anterior_carga = estado_Carga
+        estado_anterior_descarga = estado_Descarga
+
         # 5. CONTROL DE POTENCIA (CARGA)
         # Si no hay alerta térmica, procedemos a la carga de la batería
         if estado_Carga and not alerta_termica:
             # Deshabilitamos la descarga poniendo en 0 el ciclo de actividad del pin de descarga
             pin_Descarga.duty(0)
             # Procedemos con la carga si la tensión de la batería está por debajo del umbral de carga
-            if v_bat_aj <= VOLTAJE_CORTE_CARGA:
-                # Hacemos un control de la corriente sobre la batería modificando el ciclo de actividad
-                # de a 20 pasos sobre 1023 (ya que el método duty de la clase PWM recibe como parámetro
-                # un número que se divide por 1023 para obtener el ciclo de actividad). De esta manera,
-                # la corriente se mantiene cerca del valor objetivo, en un rango de 
-                # [CORRIENTE_OBJETIVO - 50 mA; CORRIENTE_OBJETIVO + 50 mA]
-                if i_bat_prom < (CORRIENTE_OBJETIVO - 50): 
-                    nivelPWM += 20  # Si la corriente está por debajo del rango, aumentamos el ciclo de actividad
-                if i_bat_prom > (CORRIENTE_OBJETIVO + 50): 
-                    nivelPWM -= 20  # Si la corriente está por encima del rango, bajamos el ciclo de actividad
+            v_eval_carga = v_bat_filtrada if v_bat_filtrada is not None else v_bat_aj
+            if v_eval_carga <= VOLTAJE_CORTE_CARGA:
+                # Control proporcional adaptativo de corriente para evitar oscilaciones (hunting):
+                # Si el error es grande (>200 mA), avanza de a 12 pasos para respuesta rápida;
+                # si se aproxima (entre 50 y 200 mA), avanza de a 3 o 5 pasos;
+                # dentro de la banda muerta (±50 mA), no se modifica nivelPWM para estabilidad absoluta.
+                error_i = CORRIENTE_OBJETIVO - i_bat_prom
+                if abs(error_i) > 50:
+                    paso = 12 if abs(error_i) > 200 else (5 if abs(error_i) > 100 else 2)
+                    if error_i > 0:
+                        nivelPWM += paso
+                    else:
+                        nivelPWM -= paso
                 # Ponemos un límite de 1000/1023 (97.75%) al ciclo de actividad
                 nivelPWM = max(0, min(1000, nivelPWM)) 
                 pin_Carga.duty(nivelPWM)
+
+                # Detección de estancamiento / plateau de tensión (finalización por dV/dt nulo o batería saturada):
+                # Si luego de un tiempo inicial de estabilización (60 s), la tensión no aumenta al menos 20 mV
+                # durante 2 intervalos sucesivos de 60 s (total ~2 min), se considera que la batería no absorbe más
+                # carga y se detiene el proceso para no sobrecalentarla inútilmente.
+                if ticks_diff(ticks_ms(), tiempo_inicio_fase) > 60000:
+                    if ticks_diff(ticks_ms(), ultimo_chequeo_estancamiento) > 60000:
+                        delta_v = v_eval_carga - v_ref_estancamiento
+                        if delta_v < 0.02:  # Incremento menor a 20 mV o caída (-dV)
+                            conteo_estancamiento += 1
+                            print(f"[CARGA] Control de estancamiento: delta = {delta_v:+.3f}V en 60s (conteo {conteo_estancamiento}/2)")
+                            if conteo_estancamiento >= 2:
+                                print(f"[CARGA] Fin por plateau de tensión: la batería no aumenta de {v_eval_carga:.2f}V. Carga completada.")
+                                estado_Carga = False
+                                pin_Carga.duty(0)
+                        else:
+                            conteo_estancamiento = 0
+                        v_ref_estancamiento = v_eval_carga
+                        ultimo_chequeo_estancamiento = ticks_ms()
             else:
                 # Si la tensión de la batería está por encima del umbral de carga, deshabilitamos la carga
                 estado_Carga = False
@@ -684,16 +758,39 @@ while True:
             # Deshabilitamos la carga poniendo en 0 el ciclo de actividad del pin de carga
             pin_Carga.duty(0)
             # Procedemos con la descarga si la tensión de la batería está por encima del umbral de descarga
-            if v_bat_aj > VOLTAJE_CORTE_DESCARGA:
-                # Hacemos el mismo control de corriente que hacemos para la carga (es decir, variamos
-                # el ciclo de actividad hasta alcanzar la corriente objetivo)
-                if i_bat_prom < (CORRIENTE_OBJETIVO - 50): nivelPWM += 20
-                if i_bat_prom > (CORRIENTE_OBJETIVO + 50): nivelPWM -= 20
+            v_eval_desc = v_bat_filtrada if v_bat_filtrada is not None else v_bat_aj
+            if v_eval_desc > VOLTAJE_CORTE_DESCARGA:
+                # Control proporcional adaptativo de corriente para descarga
+                error_i = CORRIENTE_OBJETIVO - i_bat_prom
+                if abs(error_i) > 50:
+                    paso = 12 if abs(error_i) > 200 else (5 if abs(error_i) > 100 else 2)
+                    if error_i > 0:
+                        nivelPWM += paso
+                    else:
+                        nivelPWM -= paso
                 # Ponemos un límite de 1000/1023 (97.75%) al ciclo de actividad
                 nivelPWM = max(0, min(1000, nivelPWM))
                 pin_Descarga.duty(nivelPWM)
+
+                # Detección de estancamiento de tensión en descarga:
+                # Si durante la descarga la tensión deja de disminuir significativamente (< 20 mV en 2 intervalos)
+                # o la batería ya no es capaz de entregar más energía, se finaliza la descarga.
+                if ticks_diff(ticks_ms(), tiempo_inicio_fase) > 60000:
+                    if ticks_diff(ticks_ms(), ultimo_chequeo_estancamiento) > 60000:
+                        delta_v = v_ref_estancamiento - v_eval_desc
+                        if delta_v < 0.02:  # Caída menor a 20 mV
+                            conteo_estancamiento += 1
+                            print(f"[DESCARGA] Control de estancamiento: delta = {delta_v:+.3f}V en 60s (conteo {conteo_estancamiento}/2)")
+                            if conteo_estancamiento >= 2:
+                                print(f"[DESCARGA] Fin por estabilización: la tensión se mantuvo en {v_eval_desc:.2f}V. Descarga completada.")
+                                estado_Descarga = False
+                                pin_Descarga.duty(0)
+                        else:
+                            conteo_estancamiento = 0
+                        v_ref_estancamiento = v_eval_desc
+                        ultimo_chequeo_estancamiento = ticks_ms()
             else:
-                # Si la tensión de la batería está por debajo del umbral de carga, deshabilitamos la descarga
+                # Si la tensión de la batería está por debajo del umbral de descarga, deshabilitamos la descarga
                 estado_Descarga = False
                 pin_Descarga.duty(0)
         else:
@@ -701,39 +798,45 @@ while True:
             pin_Descarga.duty(0)
 
         # 6.5 LÓGICA MÁQUINA DE ESTADOS (MODO AUTO)
-        # Esta máquina de estados permite implementar la secuencia de carga y descarga del modo auto
+        # Esta máquina de estados permite implementar la secuencia de carga y descarga del modo auto con N ciclos configurables
         if modo_auto:
-            if paso_auto == "DESC1" and not estado_Descarga: # Terminó DESC1
-                # Si terminó la descarga, pasamos al estado WAIT1 para esperar a que se enfríe la batería
-                # antes de proceder con la carga
-                paso_auto = "WAIT1"
+            if (paso_auto == "DESC" or paso_auto == "DESC1") and not estado_Descarga:  # Terminó la descarga del ciclo actual
+                # Si terminó la descarga, pasamos a esperar a que se enfríe la batería antes de cargar
+                paso_auto = "WAIT_DESC"
                 inicio_espera = ticks_ms()  # Registramos el instante de tiempo en el que empieza la espera de 15 minutos
-                print("PASO 2: ESPERANDO ENFRIAMIENTO...")
-            elif paso_auto == "WAIT1" and ticks_diff(ticks_ms(), inicio_espera) > TIEMPO_DESCANSO_MS:
-                # Si ya transcurrieron 15 minutos desde que terminó la descarga, pasamos al estado
-                # CARGA para iniciar la carga de la batería
+                print(f"[AUTO {ciclo_auto_actual}/{total_ciclos_auto}] Descarga finalizada. Esperando enfriamiento (15 min)...")
+            elif (paso_auto == "WAIT_DESC" or paso_auto == "WAIT1") and ticks_diff(ticks_ms(), inicio_espera) > TIEMPO_DESCANSO_MS:
+                # Finalizado el tiempo de enfriamiento, iniciamos la carga
                 paso_auto = "CARGA"
                 estado_Carga = True
                 nivelPWM = 0
-                print("PASO 3: INICIANDO CARGA...")
-            elif paso_auto == "CARGA" and not estado_Carga:  # Terminó CARGA
-                # Si terminó la carga, pasamos al estado "WAIT2" para esperar a que se estabilice la batería
-                # antes de empezar una segunda descarga
-                paso_auto = "WAIT2"
+                print(f"[AUTO {ciclo_auto_actual}/{total_ciclos_auto}] Iniciando carga...")
+            elif paso_auto == "CARGA" and not estado_Carga:  # Terminó la carga del ciclo actual
+                # Si terminó la carga, pasamos a esperar a que se estabilice la química
+                paso_auto = "WAIT_CARGA"
                 inicio_espera = ticks_ms()  # Registramos el instante de tiempo en el que empieza la espera de 15 minutos
-                print("PASO 4: ESPERANDO ESTABILIZACIÓN...")
-            elif paso_auto == "WAIT2" and ticks_diff(ticks_ms(), inicio_espera) > TIEMPO_DESCANSO_MS:
-                # Si ya transcurrieron 15 minutos desde que terminó la carga, pasamos al estado
-                # DESC2 para iniciar la segunda descarga de la batería
-                paso_auto = "DESC2"
-                estado_Descarga = True
-                nivelPWM = 0
-                print("PASO 5: INICIANDO TEST FINAL...")
-            elif paso_auto == "DESC2" and not estado_Descarga:  # Terminó DESC2
-                # Si terminó la segunda descarga, damos por finalizado el modo auto
+                print(f"[AUTO {ciclo_auto_actual}/{total_ciclos_auto}] Carga finalizada. Esperando estabilización (15 min)...")
+            elif (paso_auto == "WAIT_CARGA" or paso_auto == "WAIT2") and ticks_diff(ticks_ms(), inicio_espera) > TIEMPO_DESCANSO_MS:
+                # Si aún quedan ciclos por completar, avanzamos al siguiente ciclo
+                if ciclo_auto_actual < total_ciclos_auto:
+                    ciclo_auto_actual += 1
+                    paso_auto = "DESC"
+                    estado_Descarga = True
+                    nivelPWM = 0
+                    print(f"[AUTO] Avanzando al ciclo {ciclo_auto_actual} de {total_ciclos_auto} (Descarga)...")
+                else:
+                    # Se completaron todos los ciclos programados; realizamos la descarga final para caracterización
+                    paso_auto = "DESC_FINAL"
+                    estado_Descarga = True
+                    nivelPWM = 0
+                    print(f"[AUTO] Todos los {total_ciclos_auto} ciclos completados. Iniciando descarga final de caracterización...")
+            elif (paso_auto == "DESC_FINAL" or paso_auto == "DESC2") and not estado_Descarga:
+                # Terminó la descarga final, finalizamos el modo auto
                 modo_auto = False
                 paso_auto = "IDLE"
-                print("MODO AUTO COMPLETADO")
+                ciclo_auto_actual = 1
+                total_ciclos_auto = 1
+                print("MODO AUTO COMPLETADO CON ÉXITO")
 
         # --- Cálculo de Capacidad (Ah) ---
         # Variable que indica si la batería actualmente se está cargando o descargando
@@ -760,13 +863,27 @@ while True:
         estado_anterior_activo = activo_actual
 
         # 7. TELEMETRÍA (Pantalla y MQTT)
-        # Guardamos el estado del sistema
-        estado_str = f"AUTO:{paso_auto}" if modo_auto else ("ALERTA: SOBRETEMPERATURA" if alerta_termica else ("CARGANDO" if estado_Carga else ("DESCARGANDO" if estado_Descarga else "REPOSO")))
+        # Guardamos el estado del sistema con formato descriptivo claro
+        if modo_auto:
+            if paso_auto in ("WAIT_DESC", "WAIT_CARGA", "WAIT1", "WAIT2"):
+                restante_min = max(0, int((TIEMPO_DESCANSO_MS - ticks_diff(ticks_ms(), inicio_espera)) / 60000)) + 1
+                estado_str = f"AUTO {ciclo_auto_actual}/{total_ciclos_auto} REPOSO ({restante_min}m)"
+            elif paso_auto == "DESC_FINAL":
+                estado_str = "AUTO DESCARGA FINAL"
+            elif paso_auto == "CARGA":
+                estado_str = f"AUTO {ciclo_auto_actual}/{total_ciclos_auto} CARGANDO"
+            elif paso_auto in ("DESC", "DESC1", "DESC2"):
+                estado_str = f"AUTO {ciclo_auto_actual}/{total_ciclos_auto} DESCARGANDO"
+            else:
+                estado_str = f"AUTO {paso_auto}"
+        else:
+            estado_str = "ALERTA: SOBRETEMPERATURA" if alerta_termica else ("CARGANDO" if estado_Carga else ("DESCARGANDO" if estado_Descarga else "REPOSO"))
         
         # Enviamos Ah y RI a la pantalla también
+        v_disp = v_bat_filtrada if v_bat_filtrada is not None else v_bat_aj
         # Enviamos las variables a la pantalla en formato JSON
         json_tft = json.dumps({
-            "v": round(v_bat_aj, 2),  # Tensión de la batería [V] (con 2 decimales)
+            "v": round(v_disp, 2),  # Tensión de la batería [V] (filtrada, estable como multímetro)
             "i": round(i_bat_prom, 0),  # Corriente de la batería [mA]
             "t": round(temperatura, 1),  # Temperatura [°C]
             "st": estado_str,  # Estado del sistema
@@ -781,7 +898,7 @@ while True:
             # v: Tensión de la batería [V], i: Corriente de la batería [mA], t: Temperatura [°C]
             # s: Estado del sistema, qr: Código QR, ah: Capacidad [Ah], p: Perfil o tipo de batería
             # vc: Umbral de tensión de carga [V], vd: Umbral de tensión de descarga
-            mensaje_mqtt = f"v:{v_bat_aj:.2f},i:{i_bat_prom:.0f},t:{temperatura:.1f},s:{estado_str},qr:{bateria_qr_actual},ah:{capacidad_ah:.3f},p:{perfil_actual},vc:{VOLTAJE_CORTE_CARGA:.2f},vd:{VOLTAJE_CORTE_DESCARGA:.2f}"
+            mensaje_mqtt = f"v:{v_disp:.2f},i:{i_bat_prom:.0f},t:{temperatura:.1f},s:{estado_str},qr:{bateria_qr_actual},ah:{capacidad_ah:.3f},p:{perfil_actual},vc:{VOLTAJE_CORTE_CARGA:.2f},vd:{VOLTAJE_CORTE_DESCARGA:.2f}"
             if mqtt_client:
                 try:
                     mqtt_client.publish(MQTT_TOPIC_TELEMETRY, mensaje_mqtt)

@@ -1,20 +1,24 @@
+import os
 import time
 import json  # Módulo para trabajar con archivos JSON
+import io  # Flujo de datos en memoria para exportación
 from datetime import datetime  # Módulo para trabajar con fecha y hora
 import requests  # Biblioteca para realizar peticiones HTTP
 import csv  # Biblioteca para trabajar con archivos CSV
+from typing import Optional, List  # Tipos para validación de datos
+from pydantic import BaseModel  # Validación de esquemas en peticiones FastAPI
 # Importamos paho.mqtt, que es una biblioteca para trabajar con MQTT. Permite publicar mensajes 
 # y suscribirse a tópicos MQTT
 import paho.mqtt.client as mqtt
 # Importamos componentes de SQLAlchemy, la cual es un kit de herramientas SQL para interacción con base de datos
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 # Importamos el cliente de InfluxDB para escribir datos en InfluxDB
 from influxdb import InfluxDBClient
 # Importamos componentes propios de FastAPI (framework para construir APIs con Python)
 from fastapi import FastAPI, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- CONFIGURACIÓN DE BASES DE DATOS ---
@@ -23,7 +27,8 @@ from fastapi.middleware.cors import CORSMiddleware
 son persistentes y atemporales, a diferencia de Influx DB """
 # Creamos un motor, el cual es una fábrica que puede crear nuevas conexiones a la base de datos por nosotros
 # Este motor se vincula al archivo de base de datos que está guardado en la carpeta backend
-engine = create_engine('sqlite:///./baterias.db', connect_args={"check_same_thread": False})
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baterias.db")
+engine = create_engine(f'sqlite:///{DB_PATH}', connect_args={"check_same_thread": False})
 # Creamos un objeto sesión (Session), el cual establece todas las conversaciones con la base de datos y representa
 # una "zona de retención" para todos los objetos que han sido cargados o asociados con ella durante su ciclo de vida
 # Asociamos la sesión con el motor creado anteriormente
@@ -42,6 +47,7 @@ class Inventario(Base):
     qr_id = Column(String, primary_key=True, index=True)  # QR de la batería (tipo String, clave primaria)
     fecha_registro = Column(DateTime, default=datetime.utcnow)  # Fecha de registro (tipo DateTime, valor por defecto = fecha y hora actual)
     estado_general = Column(String, default="OPERATIVO")  # Estado general (tipo String, valor por defecto = "OPERATIVO")
+    estado_inicial = Column(String, default="Sin especificar")  # Estado inicial con el que salió del pack
 
 # Tabla para almacenar el historial de ciclos de carga y descarga
 class HistorialCiclos(Base):
@@ -60,6 +66,14 @@ class HistorialCiclos(Base):
 
 # Creamos todas las tablas declaradas anteriormente, pasando como argumento el motor para acceder a la base de datos
 Base.metadata.create_all(bind=engine)
+
+# Migración suave en SQLite por si la columna estado_inicial no existe en la base de datos ya creada
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE baterias_inventario ADD COLUMN estado_inicial VARCHAR DEFAULT 'Sin especificar'"))
+        conn.commit()
+except Exception:
+    pass  # La columna ya existe o la tabla se acaba de crear con ella
 
 # 2. InfluxDB (Telemetría en vivo)
 """Esta BD se usa para guardar los datos de la batería mientras se está cargando y descargando. Los datos guardados son temporales, y
@@ -166,7 +180,7 @@ def on_message(client, userdata, msg):
                 # Guardamos los datos recibidos en un diccionario, en el cual las claves son los símbolos provenientes del mensaje
                 # Primero separamos cada uno de los campos del payload, y luego recorremos los campos y construimos un diccionario en el
                 # cual las claves serán los identificadores de los campos y los valores serán los valores de los campos
-                datos = dict(item.split(":") for item in payload.split(","))
+                datos = dict(item.split(":", 1) for item in payload.split(",") if ":" in item)
                 # Extraemos del diccionario la corriente, la tensión, la temperatura y el estado actual
                 v, i, t, estado = float(datos['v']), float(datos['i']), float(datos['t']), datos['s']
             except Exception as e:
@@ -204,8 +218,11 @@ def on_message(client, userdata, msg):
                     print(f"Error escribiendo en InfluxDB (Omitiendo): {e}")
 
             # 2. Lógica de Integración Ah (Trapecio simple)
-            if estado != "REPOSO":
-                # Si el estado es distinto de reposo, realizamos el cálculo de la capacidad mediante una integral
+            es_activo = ("CARG" in estado) or ("DESC" in estado)
+            es_reposo = not es_activo
+            
+            if es_activo:
+                # Si el estado es activo (carga o descarga), realizamos el cálculo de la capacidad mediante una integral
                 if ciclo_activo["ultima_lectura"]:
                     # Calculamos el diferencial de tiempo entre el instante de tiempo actual y el instante de tiempo de la última lectura
                     dt_horas = (ahora - ciclo_activo["ultima_lectura"]).total_seconds() / 3600.0
@@ -217,10 +234,9 @@ def on_message(client, userdata, msg):
                 ciclo_activo["temp_maxima"] = t  # Actualizamos la temperatura máxima
 
             # Transición: Inicio de Ciclo
-            if estado != "REPOSO" and ciclo_activo["estado_anterior"] == "REPOSO":
+            anterior_era_reposo = "REPOSO" in ciclo_activo["estado_anterior"] or not (("CARG" in ciclo_activo["estado_anterior"]) or ("DESC" in ciclo_activo["estado_anterior"]))
+            if es_activo and anterior_era_reposo:
                 # Si el sistema cambió de estado partiendo del reposo, debemos registrar un nuevo ciclo
-                # Creamos una instancia de la clase HistorialCiclos, para insertar un nuevo registro en esa tabla
-                # Este nuevo registro tendrá solamente 3 campos, ya que los restantes campos se agregan al finalizar el ciclo
                 nuevo_ciclo = HistorialCiclos(
                     qr_id=ciclo_activo["qr_actual"],
                     tipo_ciclo=estado,
@@ -231,7 +247,6 @@ def on_message(client, userdata, msg):
                 # Hacemos una confirmación de la transacción actual para que los datos persistan en la BD
                 db.commit()
                 # Recargamos los atributos del objeto de la base de datos, asegurando que el objeto refleje el estado más actual
-                # Este método realiza una consulta SELECT para recargar los atributos del objeto
                 db.refresh(nuevo_ciclo)
                 # Actualizamos algunas variables que representan el estado del sistema
                 ciclo_activo["id_ciclo_sql"] = nuevo_ciclo.id
@@ -244,15 +259,15 @@ def on_message(client, userdata, msg):
 
             # Cálculo de Resistencia Interna (Primeros segundos)
             # Se calcula la resistencia interna instantánea como la razón entre un diferencial de tensión (dv) y un diferencial de corriente (di)
-            elif estado != "REPOSO" and ciclo_activo["ri_calculada"] == 0.0:
-                di = abs(i - ciclo_activo["i_inicial"])  # Diferencial de tensión
-                dv = abs(v - ciclo_activo["v_inicial"])  # Diferencial de corriente
+            elif es_activo and ciclo_activo["ri_calculada"] == 0.0:
+                di = abs(i - ciclo_activo["i_inicial"])  # Diferencial de corriente
+                dv = abs(v - ciclo_activo["v_inicial"])  # Diferencial de tensión
                 if di > 100: # Necesitamos un delta de corriente significativo (>100mA)
                     ciclo_activo["ri_calculada"] = (dv / (di / 1000.0)) * 1000.0 # mOhm
                     print(f"RI Calculada: {ciclo_activo['ri_calculada']:.1f} mOhm")
 
             # Transición: Fin de Ciclo
-            elif estado == "REPOSO" and ciclo_activo["estado_anterior"] != "REPOSO":
+            elif es_reposo and not anterior_era_reposo:
                 # Si el sistema pasó al estado de reposo, guardamos los parámetros y las variables de la batería en la BD de SQL
                 if ciclo_activo["id_ciclo_sql"]:
                     # Hacemos una consulta a la tabla HistorialCiclos, filtramos mediante un criterio (el id debe coincidir con el ID del ciclo actual)
@@ -272,11 +287,11 @@ def on_message(client, userdata, msg):
                         tipo_anterior = ciclo_activo["estado_anterior"]
                         
                         fue_interrumpido = False  # Bandera que indica si el ciclo fue interrumpido o completado normalmente
-                        if tipo_anterior == "CARGANDO":
+                        if "CARG" in tipo_anterior:
                             # Si la tensión de la batería no alcanzó el umbral de corte de carga, quiere decir que el ciclo de carga fue interrumpido
                             if v < (v_corte_carga - 0.1):
                                 fue_interrumpido = True
-                        elif tipo_anterior == "DESCARGANDO":
+                        elif "DESC" in tipo_anterior:
                             # Si la tensión de la batería no llegó al umbral de corte de descarga, quiere decir que el ciclo de descarga fue interrumpido
                             if v > (v_corte_descarga + 0.1):
                                 fue_interrumpido = True
@@ -287,7 +302,7 @@ def on_message(client, userdata, msg):
                             ciclo.soh_porcentaje = 0.0  # El estado de salud (SoH) vale 0 ya que no se completó el ciclo
                         else:
                             # SoH Mejorado (Capacidad + Resistencia) se calcula sólo para descargas completadas normalmente
-                            if tipo_anterior == "DESCARGANDO":
+                            if "DESC" in tipo_anterior:
                                 cap_nominal = ciclo_activo.get("cap_nominal", 2.5)  # Capacidad nominal (valor por defecto de 2.5 Ah)
                                 ri_last = ciclo_activo.get("ri_calculada", 0.0)  # Último valor de resistencia interna (valor por defecto de 0.0)
                                 # Calculamos la razón entre la capacidad acumulada y la capacidad nominal
@@ -375,10 +390,21 @@ def enviar_comando_esp32(accion: str):
     # Retornamos el estado y el comando
     return {"status": "Comando enviado", "accion": accion}
 # Creamos la ruta /set_qr y manejamos las peticiones POST a esa ruta
+# Modelos Pydantic para validación de datos en la API
+class BateriaUpdate(BaseModel):
+    nuevo_qr_id: Optional[str] = None
+    estado_inicial: Optional[str] = None
+    estado_general: Optional[str] = None
+
+class BateriaImportItem(BaseModel):
+    qr_id: str
+    estado_inicial: Optional[str] = "Sin especificar"
+    estado_general: Optional[str] = "OPERATIVO"
+
 # Esta ruta permite publicar el QR desde la interfaz web
 @app.post("/set_qr")
-def set_qr_manual(qr: str):
-    """Asigna manualmente el QR de la batería activa"""
+def set_qr_manual(qr: str, estado_inicial: Optional[str] = None):
+    """Asigna manualmente el QR de la batería activa y opcionalmente su estado inicial"""
     qr = qr.strip()  # Eliminamos los espacios al comienzo y al final de la cadena
     if not qr or len(qr) < 2:
         # Si no se envió el QR o es inválido (menos de 2 caracteres), devolvemos un mensaje de error
@@ -394,12 +420,13 @@ def set_qr_manual(qr: str):
     bateria = db.query(Inventario).filter(Inventario.qr_id == qr).first()
     # Si la batería no está en la base de datos, la guardamos
     if not bateria:
-        # Si el QR es nuevo, lo registramos en el inventario
-        # Creamos una nueva instancia de la clase Inventario, para insertar un nuevo registro en esa tabla. En este registro,
-        # sólo guardamos el QR de la batería
-        nueva_bat = Inventario(qr_id=qr)
+        # Si el QR es nuevo, lo registramos en el inventario con su estado inicial si fue provisto
+        nueva_bat = Inventario(qr_id=qr, estado_inicial=estado_inicial or "Sin especificar")
         db.add(nueva_bat)  # Insertamos un nuevo registro en la tabla
         db.commit()  # Confirmamos los cambios para que los datos persistan en la BD
+    elif estado_inicial:
+        bateria.estado_inicial = estado_inicial
+        db.commit()
     # Cerramos la sesión de la base de datos
     db.close()
     # Retornamos el estado y el código QR
@@ -413,49 +440,263 @@ def disparar_escaneo():
     return {"status": "Comando de escaneo enviado a la ESP32-CAM"}
 
 @app.get("/bateria/{qr_id}")
-def detalle_bateria(qr_id: str):
+def detalle_bateria(qr_id: str, response: Response):
     """Resumen completo de una batería: inventario + historial de ciclos"""
-    # Abrimos una sesión de la base de datos SQL
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     db = SessionLocal()
-    # Realizamos una consulta a la tabla Inventario, filtramos el QR que se encuentra en la ruta, y devolvemos el primer resultado de la consulta
-    bateria = db.query(Inventario).filter(Inventario.qr_id == qr_id).first()
-    if not bateria:
-        # Si no se encontró la batería en la BD, cerramos la sesión y devolvemos un mensaje de error
+    try:
+        qr_limpio = qr_id.strip()
+        # Realizamos una consulta a la tabla Inventario, buscando coincidencia limpia de QR
+        bateria = db.query(Inventario).filter(func.trim(Inventario.qr_id) == qr_limpio).first()
+        
+        # Realizamos una consulta a la tabla HistorialCiclos
+        ciclos = db.query(HistorialCiclos).filter(
+            func.trim(HistorialCiclos.qr_id) == qr_limpio
+        ).order_by(HistorialCiclos.fecha_inicio.desc()).all()
+        
+        # Si no existe ni en inventario ni en historial
+        if not bateria and not ciclos:
+            return {"status": "Error", "msg": f"Batería '{qr_limpio}' no encontrada"}
+
+        return {
+            "status": "OK",
+            "qr_id": bateria.qr_id if bateria else qr_limpio,
+            "fecha_registro": bateria.fecha_registro if bateria else None,
+            "estado_general": bateria.estado_general if bateria else "OPERATIVO",
+            "estado_inicial": getattr(bateria, "estado_inicial", "Sin especificar") if bateria else "Sin especificar",
+            "total_ciclos": len(ciclos),
+            "ciclos": [
+                {
+                    "id": c.id,
+                    "tipo_ciclo": c.tipo_ciclo or "DESCONOCIDO",
+                    "fecha_inicio": c.fecha_inicio,
+                    "fecha_fin": c.fecha_fin,
+                    "voltaje_final": c.voltaje_final or 0.0,
+                    "temp_maxima": c.temp_maxima or 0.0,
+                    "capacidad_ah": c.capacidad_ah or 0.0,
+                    "soh_porcentaje": c.soh_porcentaje or 0.0,
+                    "resistencia_interna": c.resistencia_interna or 0.0
+                } for c in ciclos
+            ]
+        }
+    finally:
         db.close()
-        return {"status": "Error", "msg": "Batería no encontrada"}
-    # Realizamos una consulta a la tabla HistorialCiclos, filtramos el QR que se encuentra en la ruta, ordenamos los registros de la tabla por
-    # fecha de inicio descendente y devolvemos los resultados como una lista
-    ciclos = db.query(HistorialCiclos).filter(
-        HistorialCiclos.qr_id == qr_id
-    ).order_by(HistorialCiclos.fecha_inicio.desc()).all()
-    # Cerramos la sesión de la BD
-    db.close()
-    # Retornamos un diccionario con los valores obtenidos de la base de datos
-    return {
-        "qr_id": bateria.qr_id,  # ID del QR
-        "fecha_registro": bateria.fecha_registro,  # Fecha de registro de la batería
-        "estado_general": bateria.estado_general,  # Estado general de la batería
-        "total_ciclos": len(ciclos),  # Número total de ciclos de carga y descarga
-        # Por cada ciclo retornamos una lista con las variables que representan el estado de la batería, para lo cual
-        # iteramos sobre la lista de ciclos obtenida de la BD
-        "ciclos": [
+
+# Edición de una batería existente (renombrar QR o actualizar estado inicial/general)
+@app.put("/bateria/{qr_id}")
+def editar_bateria(qr_id: str, datos: BateriaUpdate):
+    """Permite editar el código QR, estado inicial o estado general de una batería existente"""
+    db = SessionLocal()
+    try:
+        bateria = db.query(Inventario).filter(Inventario.qr_id == qr_id).first()
+        if not bateria:
+            return {"status": "Error", "msg": "Batería no encontrada"}
+
+        # Si se solicita renombrar el código QR
+        nuevo_id = datos.nuevo_qr_id.strip() if datos.nuevo_qr_id else None
+        if nuevo_id and nuevo_id != qr_id:
+            # Comprobar que no colisione con otra batería existente
+            existente = db.query(Inventario).filter(Inventario.qr_id == nuevo_id).first()
+            if existente:
+                return {"status": "Error", "msg": f"Ya existe una batería con el identificador '{nuevo_id}'"}
+            
+            # Crear nueva fila con el nuevo identificador
+            nueva_instancia = Inventario(
+                qr_id=nuevo_id,
+                fecha_registro=bateria.fecha_registro,
+                estado_general=datos.estado_general.strip() if datos.estado_general is not None else bateria.estado_general,
+                estado_inicial=datos.estado_inicial.strip() if datos.estado_inicial is not None else getattr(bateria, "estado_inicial", "Sin especificar")
+            )
+            db.add(nueva_instancia)
+            # Reasignar en cascada todos los ciclos registrados
+            db.query(HistorialCiclos).filter(HistorialCiclos.qr_id == qr_id).update({"qr_id": nuevo_id})
+            # Eliminar la clave primaria antigua
+            db.delete(bateria)
+
+            # Si era la batería activa en el banco, actualizar memoria global
+            if ciclo_activo.get("qr_actual") == qr_id:
+                ciclo_activo["qr_actual"] = nuevo_id
+                mqtt_client.publish("ESP32/bateria_qr", nuevo_id)
+        else:
+            # Solo actualizar atributos
+            if datos.estado_inicial is not None:
+                bateria.estado_inicial = datos.estado_inicial.strip()
+            if datos.estado_general is not None:
+                bateria.estado_general = datos.estado_general.strip()
+
+        db.commit()
+        return {"status": "Éxito", "msg": "Batería actualizada correctamente"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "Error", "msg": str(e)}
+    finally:
+        db.close()
+
+# Eliminación de una batería específica del inventario
+@app.delete("/bateria/{qr_id}")
+def eliminar_bateria(qr_id: str, response: Response):
+    """Elimina una batería del inventario y todo su historial de ciclos asociado"""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    db = SessionLocal()
+    try:
+        qr_limpio = qr_id.strip()
+        # Eliminar historial asociado (tanto con el QR exacto como con espacios limpios)
+        db.execute(text("DELETE FROM historial_ciclos WHERE TRIM(qr_id) = :qr"), {"qr": qr_limpio})
+        # Eliminar del inventario
+        res = db.execute(text("DELETE FROM baterias_inventario WHERE TRIM(qr_id) = :qr"), {"qr": qr_limpio})
+        db.commit()
+        if ciclo_activo.get("qr_actual", "").strip() == qr_limpio:
+            ciclo_activo["qr_actual"] = "NINGUNA"
+            ciclo_activo["id_ciclo_sql"] = None
+        return {"status": "Éxito", "msg": f"Batería '{qr_limpio}' y sus ciclos asociados han sido eliminados correctamente"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "Error", "msg": str(e)}
+    finally:
+        db.close()
+
+# Limpieza y reset de base de datos (inventario, ciclos o todo)
+@app.delete("/limpiar_datos")
+def limpiar_datos(tipo: str = "todos", response: Response = None):
+    """
+    Limpia registros de la base de datos según el tipo especificado:
+    - 'ciclos': borra únicamente el historial de ciclos.
+    - 'inventario': borra todas las baterías del inventario.
+    - 'todos': borra inventario, ciclos y resetea ciclo_activo.
+    """
+    if response:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    db = SessionLocal()
+    try:
+        if tipo == "ciclos":
+            db.execute(text("DELETE FROM historial_ciclos"))
+            db.commit()
+            ciclo_activo["id_ciclo_sql"] = None
+            print("Limpieza completada: Historial de ciclos borrado.")
+            return {"status": "Éxito", "msg": "Historial de ciclos eliminado correctamente"}
+        elif tipo == "inventario":
+            db.execute(text("DELETE FROM baterias_inventario"))
+            db.commit()
+            if ciclo_activo.get("qr_actual") != "NINGUNA":
+                ciclo_activo["qr_actual"] = "NINGUNA"
+                ciclo_activo["id_ciclo_sql"] = None
+            print("Limpieza completada: Inventario de baterías borrado.")
+            return {"status": "Éxito", "msg": "Inventario de baterías eliminado correctamente"}
+        elif tipo == "todos":
+            db.execute(text("DELETE FROM historial_ciclos"))
+            db.execute(text("DELETE FROM baterias_inventario"))
+            db.commit()
+            ciclo_activo["id_ciclo_sql"] = None
+            ciclo_activo["qr_actual"] = "NINGUNA"
+            print("Limpieza completada: Inventario y ciclos borrados.")
+            return {"status": "Éxito", "msg": "Inventario y ciclos eliminados correctamente"}
+        else:
+            return {"status": "Error", "msg": f"Tipo de limpieza desconocido: {tipo}"}
+    except Exception as e:
+        db.rollback()
+        print("Error en limpiar_datos:", e)
+        return {"status": "Error", "msg": str(e)}
+    finally:
+        db.close()
+
+# Importación masiva de baterías mediante JSON
+@app.post("/importar_inventario")
+def importar_inventario(baterias: List[BateriaImportItem]):
+    """Importa o actualiza un lote de baterías al inventario desde JSON"""
+    db = SessionLocal()
+    insertadas = 0
+    actualizadas = 0
+    try:
+        for item in baterias:
+            qr = item.qr_id.strip()
+            if not qr:
+                continue
+            existente = db.query(Inventario).filter(Inventario.qr_id == qr).first()
+            if existente:
+                if item.estado_inicial and item.estado_inicial != "Sin especificar":
+                    existente.estado_inicial = item.estado_inicial.strip()
+                if item.estado_general:
+                    existente.estado_general = item.estado_general.strip()
+                actualizadas += 1
+            else:
+                nueva = Inventario(
+                    qr_id=qr,
+                    estado_inicial=item.estado_inicial.strip() if item.estado_inicial else "Sin especificar",
+                    estado_general=item.estado_general.strip() if item.estado_general else "OPERATIVO"
+                )
+                db.add(nueva)
+                insertadas += 1
+        db.commit()
+        return {
+            "status": "Éxito",
+            "insertadas": insertadas,
+            "actualizadas": actualizadas,
+            "total_procesadas": insertadas + actualizadas
+        }
+    except Exception as e:
+        db.rollback()
+        return {"status": "Error", "msg": str(e)}
+    finally:
+        db.close()
+
+# Exportación completa en formato JSON
+@app.get("/exportar_json")
+def exportar_json():
+    """Exporta todo el inventario y el historial de ciclos en formato JSON estructurado descargable"""
+    db = SessionLocal()
+    try:
+        inventario = db.query(Inventario).all()
+        historial = db.query(HistorialCiclos).order_by(HistorialCiclos.fecha_inicio.asc()).all()
+        
+        datos_inventario = [
             {
-                "id": c.id,  # ID del ciclo
-                "tipo_ciclo": c.tipo_ciclo,  # Tipo de ciclo
-                "fecha_inicio": c.fecha_inicio,  # Fecha de inicio del ciclo
-                "fecha_fin": c.fecha_fin,  # Fecha de finalización del ciclo
-                "voltaje_final": c.voltaje_final,  # Tensión final de la batería
-                "temp_maxima": c.temp_maxima,  # Temperatura máxima
-                "capacidad_ah": c.capacidad_ah,  # Capacidad
-                "soh_porcentaje": c.soh_porcentaje,  # Porcentaje de SoH
-                "resistencia_interna": c.resistencia_interna  # Resistencia interna
-            } for c in ciclos
+                "qr_id": b.qr_id,
+                "fecha_registro": b.fecha_registro.isoformat() if b.fecha_registro else None,
+                "estado_general": b.estado_general,
+                "estado_inicial": getattr(b, "estado_inicial", "Sin especificar") or "Sin especificar"
+            }
+            for b in inventario
         ]
-    }
+        
+        datos_historial = [
+            {
+                "id": c.id,
+                "qr_id": c.qr_id,
+                "tipo_ciclo": c.tipo_ciclo,
+                "fecha_inicio": c.fecha_inicio.isoformat() if c.fecha_inicio else None,
+                "fecha_fin": c.fecha_fin.isoformat() if c.fecha_fin else None,
+                "voltaje_final": c.voltaje_final,
+                "temp_maxima": c.temp_maxima,
+                "capacidad_ah": c.capacidad_ah,
+                "soh_porcentaje": c.soh_porcentaje,
+                "resistencia_interna": c.resistencia_interna
+            }
+            for c in historial
+        ]
+        
+        resultado = {
+            "fecha_exportacion": datetime.utcnow().isoformat(),
+            "banco": "Banco de Baterías Inteligente",
+            "total_baterias": len(datos_inventario),
+            "total_ciclos": len(datos_historial),
+            "inventario": datos_inventario,
+            "historial_ciclos": datos_historial
+        }
+        
+        json_str = json.dumps(resultado, indent=2, ensure_ascii=False)
+        return Response(
+            content=json_str,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=banco_baterias_completo.json"}
+        )
+    finally:
+        db.close()
+
 # Creamos la ruta /baterias y manejamos las peticiones GET a esa ruta
 # Esta ruta permite obtener todas las baterías registradas
 @app.get("/baterias")
-def listar_baterias():
+def listar_baterias(response: Response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     # Abrimos una sesión de la base de datos SQL
     db = SessionLocal()
     # Realizamos una consulta a la tabla Inventario para obtener todas las baterías
@@ -463,14 +704,16 @@ def listar_baterias():
     resultado = []
     # Iteramos sobre la lista de baterías
     for b in baterias:
-        # Hacemos una consulta a la tabla HistorialCiclos, filtramos por ID y contamos el número de ciclos
-        count = db.query(HistorialCiclos).filter(HistorialCiclos.qr_id == b.qr_id).count()
+        # Hacemos una consulta a la tabla HistorialCiclos, filtramos por ID limpio y contamos el número de ciclos
+        qr_b = (b.qr_id or "").strip()
+        count = db.query(HistorialCiclos).filter(func.trim(HistorialCiclos.qr_id) == qr_b).count()
         # Agregamos un elemento a la lista que luego retornamos
         # Cada elemento de esta lista será un diccionario con parámetros de cada batería
         resultado.append({
             "qr_id": b.qr_id,  # ID del QR
             "fecha_registro": b.fecha_registro,  # Fecha de registro
             "estado_general": b.estado_general,  # Estado general
+            "estado_inicial": getattr(b, "estado_inicial", "Sin especificar") or "Sin especificar",
             "ciclos_count": count  # Número de ciclos de carga y descarga
         })
     # Cerramos la sesión de la BD
@@ -481,7 +724,8 @@ def listar_baterias():
 # Creamos la ruta /historial y manejamos las peticiones GET a esa ruta
 # Esta ruta permite obtener el historial de todos los ciclos de carga y descarga 
 @app.get("/historial")
-def listar_historial():
+def listar_historial(response: Response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     # Abrimos una sesión de la base de datos SQL
     db = SessionLocal()
     # Realizamos una consulta a la tabla HistorialCiclos, ordenamos los registros de la tabla por fecha de inicio descendente, limitamos el
@@ -494,12 +738,13 @@ def listar_historial():
 # Creamos la ruta /historial/{qr_id} y manejamos las peticiones GET a esa ruta
 # Esta ruta es similar a la anterior, con la diferencia de que devuelve el historial de ciclos de una sola batería
 @app.get("/historial/{qr_id}")
-def historial_por_qr(qr_id: str):
+def historial_por_qr(qr_id: str, response: Response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     # Abrimos una sesión de la base de datos SQL
     db = SessionLocal()
-    # Realizamos una consulta a la tabla HistorialCiclos, filtramos por QR, ordenamos los registros de la tabla por fecha de inicio descendente 
+    # Realizamos una consulta a la tabla HistorialCiclos, filtramos por QR limpio, ordenamos los registros de la tabla por fecha de inicio descendente 
     # y devolvemos los resultados como una lista    
-    historial = db.query(HistorialCiclos).filter(HistorialCiclos.qr_id == qr_id).order_by(HistorialCiclos.fecha_inicio.desc()).all()
+    historial = db.query(HistorialCiclos).filter(func.trim(HistorialCiclos.qr_id) == qr_id.strip()).order_by(HistorialCiclos.fecha_inicio.desc()).all()
     # Cerramos la sesión de la BD y retornamos la lista obtenida
     db.close()
     return historial
@@ -562,6 +807,17 @@ def exportar_csv():
     # web o debe ser descargado como attachment localmente. En este caso, el contenido debe ser descargado
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=reporte_baterias.csv"})
 
+"""Montamos una subaplicación llamada /web dentro de la aplicación principal. En este caso, esta subaplicación nos permitirá servir 
+archivos estáticos mediante StaticFiles (index.html). Esto es útil en proyectos donde FastAPI funciona como backend y al mismo tiempo entrega
+el frontend """
+app.mount("/web", StaticFiles(directory="frontend"), name="frontend")
+
+# Ruta correspondiente a la página principal 
+@app.get("/")
+def serve_home():
+    # Devolvemos un archivo como respuesta (en este caso, el archivo correspondiente a la página principal)
+    return FileResponse("frontend/index.html")
+
 # Ruta para acceder al estado actual del sistema
 @app.get("/estado_actual")
 def obtener_estado(response: Response):
@@ -615,6 +871,6 @@ def obtener_estado(response: Response):
         ciclo_activo["esp32_online"] = False  # Indica que se perdió la conexión con el ESP32
     return ciclo_activo
 
-# Servimos el front-end (página web) ubicado en el directorio frontend
+# Servimos el front-end (página web y archivos estáticos: css, js, etc.) ubicado en el directorio frontend
 # Esto significa que FastAPI funciona como backend y al mismo tiempo entrega el frontend
-app.frontend("/", directory="frontend")
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend_estaticos")
