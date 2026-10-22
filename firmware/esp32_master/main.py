@@ -123,6 +123,8 @@ ciclo_auto_actual = 1  # Ciclo actual en ejecución del test automático
 temperatura_filtrada = None
 # Variable para el filtrado suave de la tensión de la batería
 v_bat_filtrada = None
+# Variable para el filtrado suave de la corriente de la batería
+i_bat_filtrada = None
 # ==== Variables para la comunicación
 buffer_uart_tft = ""  # Buffer que almacena los caracteres recibidos de la pantalla a través del UART2 (en formato string)
 buffer_uart_cam = ""  # Buffer para guardar los caracteres recibidos de la cámara
@@ -370,19 +372,27 @@ while True:
             except:
                 mqtt_client = None  # Desactivar MQTT roto, no crashear el loop
 
-        # 1. LECTURA DE SENSORES (30 muestras no síncronas al PWM para evitar batido de frecuencia)
+        # 1. LECTURA DE SENSORES (50 muestras con muestreo desacoplado y sobremuestreo)
         tension_sum, corriente_sum = 0, 0
-        muestras_adc = 30
+        muestras_adc = 50
         for i in range(muestras_adc):
             # Tensión leída por ADC con divisor resistivo
             v_bat = (adc_bat.read_uv() / 1000000.0) * ((R7 + R8) / R8)
             tension_sum += v_bat
             corriente_sum += ina.current()
-            sleep_us(500)  # Delay no sincrónico al ciclo de 2 ms (500 Hz) para promediar uniformemente el ciclo PWM
+            sleep_us(300)  # Delay no sincrónico al ciclo de 2 ms (500 Hz) para promediar uniformemente el ciclo PWM
         # Calculamos la tensión y la corriente promedio
         v_bat_prom = tension_sum / float(muestras_adc)
         # Factor 0.862 calibrado con multímetro en serie (promedio de 928 mA en carga y 944 mA en descarga)
-        i_bat_prom = abs(corriente_sum / float(muestras_adc)) * 0.862
+        i_bat_inst = abs(corriente_sum / float(muestras_adc)) * 0.862
+
+        # Filtro de corriente para desacoplar el rizado de conmutación de la compensación de cables/bornes
+        if i_bat_filtrada is None or not (estado_Carga or estado_Descarga):
+            i_bat_filtrada = i_bat_inst
+        else:
+            i_bat_filtrada = 0.90 * i_bat_filtrada + 0.10 * i_bat_inst
+        i_bat_prom = i_bat_filtrada
+
         # Compensación de caída de tensión en cables y bornes (ajustado con dataset real de 41 puntos):
         # - En Carga: la placa mide +286 mV por encima de la batería -> ajuste de -0.00031 V/mA (error residual < 12 mV)
         # - En Descarga: la placa mide -323 mV por debajo de la batería -> ajuste de +0.00035 V/mA (error residual < 40 mV)
@@ -394,11 +404,12 @@ while True:
         if i_bat_prom < 50.0:
             i_bat_prom = 0.0
 
-        # Filtro de suavizado (EMA) para estabilizar la lectura de tensión frente al ruido de conmutación PWM
+        # Filtro de Media Móvil Exponencial (EMA) de alta estabilidad (alpha = 0.06)
+        # Elimina el ruido residual de +-30 mV del ADC del ESP32 sin enmascarar la pendiente real de descarga/carga
         if v_bat_filtrada is None or not (estado_Carga or estado_Descarga) or v_bat_aj == 0.0:
             v_bat_filtrada = v_bat_aj
         else:
-            v_bat_filtrada = 0.80 * v_bat_filtrada + 0.20 * v_bat_aj
+            v_bat_filtrada = 0.94 * v_bat_filtrada + 0.06 * v_bat_aj
         # Leemos la temperatura del termistor NTC
         temperatura = leer_temperatura()
         # 2. LÓGICA DE SEGURIDAD
