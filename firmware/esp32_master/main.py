@@ -400,8 +400,17 @@ while True:
         if i_bat_prom < 50.0:
             i_bat_prom = 0.0
 
-        # Tensión real directa del divisor (sin ajustes sintéticos que distorsionen la dinámica real)
-        v_bat_aj = v_bat_cal
+        # Compensación física exacta de caída en cables y bornes (155 mOhm = 140 mV a 900 mA):
+        # Se usa i_bat_inst para cancelación en fase sin desfasaje temporal
+        if estado_Carga:
+            v_bat_aj = v_bat_cal - (0.000155 * i_bat_inst)
+        elif estado_Descarga:
+            v_bat_aj = v_bat_cal + (0.000155 * i_bat_inst)
+        else:
+            v_bat_aj = v_bat_cal
+
+        if v_bat_aj < 0.7:
+            v_bat_aj = 0.0
 
         # Filtro de Media Móvil Exponencial (EMA) para estabilizar la lectura de tensión sin ruidos
         if v_bat_filtrada is None or not (estado_Carga or estado_Descarga) or v_bat_aj == 0.0:
