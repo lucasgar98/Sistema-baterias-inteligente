@@ -381,35 +381,33 @@ while True:
             tension_sum += v_bat
             corriente_sum += ina.current()
             sleep_us(300)  # Delay no sincrónico al ciclo de 2 ms (500 Hz) para promediar uniformemente el ciclo PWM
-        # Calculamos la tensión y la corriente promedio
+        # Calculamos la tensión promedio del ADC
         v_bat_prom = tension_sum / float(muestras_adc)
-        # Factor 0.862 calibrado con multímetro en serie (promedio de 928 mA en carga y 944 mA en descarga)
-        i_bat_inst = abs(corriente_sum / float(muestras_adc)) * 0.862
+        # Calibración estática (-20 mV para calibrar el divisor con multímetro de referencia)
+        v_bat_cal = v_bat_prom - 0.02
 
-        # Filtro de corriente para desacoplar el rizado de conmutación de la compensación de cables/bornes
+        # Medición y filtrado de corriente
+        i_bat_inst = abs(corriente_sum / float(muestras_adc)) * 0.862
         if i_bat_filtrada is None or not (estado_Carga or estado_Descarga):
             i_bat_filtrada = i_bat_inst
         else:
-            i_bat_filtrada = 0.90 * i_bat_filtrada + 0.10 * i_bat_inst
+            i_bat_filtrada = 0.85 * i_bat_filtrada + 0.15 * i_bat_inst
         i_bat_prom = i_bat_filtrada
 
-        # Compensación de caída de tensión en cables y bornes (ajustado con dataset real de 41 puntos):
-        # - En Carga: la placa mide +286 mV por encima de la batería -> ajuste de -0.00031 V/mA (error residual < 12 mV)
-        # - En Descarga: la placa mide -323 mV por debajo de la batería -> ajuste de +0.00035 V/mA (error residual < 40 mV)
-        ajuste = -0.00031 if estado_Carga else (0.00035 if estado_Descarga else 0.0)
-        v_bat_aj = v_bat_prom + (ajuste * i_bat_prom)
-        # Si la tensión calculada es menor a 0.7 V (700 mV), la forzamos a 0.0 V exactos.
-        if v_bat_aj < 0.7:
-            v_bat_aj = 0.0
+        # Umbrales mínimos (desconexión o cero)
+        if v_bat_cal < 0.7:
+            v_bat_cal = 0.0
         if i_bat_prom < 50.0:
             i_bat_prom = 0.0
 
-        # Filtro de Media Móvil Exponencial (EMA) de alta estabilidad (alpha = 0.06)
-        # Elimina el ruido residual de +-30 mV del ADC del ESP32 sin enmascarar la pendiente real de descarga/carga
+        # Tensión real directa del divisor (sin ajustes sintéticos que distorsionen la dinámica real)
+        v_bat_aj = v_bat_cal
+
+        # Filtro de Media Móvil Exponencial (EMA) para estabilizar la lectura de tensión sin ruidos
         if v_bat_filtrada is None or not (estado_Carga or estado_Descarga) or v_bat_aj == 0.0:
             v_bat_filtrada = v_bat_aj
         else:
-            v_bat_filtrada = 0.94 * v_bat_filtrada + 0.06 * v_bat_aj
+            v_bat_filtrada = 0.88 * v_bat_filtrada + 0.12 * v_bat_aj
         # Leemos la temperatura del termistor NTC
         temperatura = leer_temperatura()
         # 2. LÓGICA DE SEGURIDAD
