@@ -1,6 +1,6 @@
 from machine import Pin, I2C, PWM, ADC, UART
 from ina219 import INA219  # Módulo para leer el sensor de corriente INA219 (no está incluido en la carpeta esp32_master)
-from time import sleep, ticks_ms, ticks_diff
+from time import sleep, sleep_us, ticks_ms, ticks_diff
 import network
 import math
 import json  # Módulo para trabajar con archivos JSON
