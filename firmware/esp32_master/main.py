@@ -403,7 +403,7 @@ while True:
         # Compensación física exacta de caída en cables y bornes (155 mOhm = 140 mV a 900 mA):
         # Se usa i_bat_inst para cancelación en fase sin desfasaje temporal
         if estado_Carga:
-            v_bat_aj = v_bat_cal - (0.000155 * i_bat_inst)
+            v_bat_aj = v_bat_cal - (0.000205 * i_bat_inst)
         elif estado_Descarga:
             v_bat_aj = v_bat_cal + (0.000155 * i_bat_inst)
         else:
