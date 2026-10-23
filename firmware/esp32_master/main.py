@@ -402,10 +402,19 @@ while True:
 
         # Compensación física exacta de caída en cables y bornes (155 mOhm = 140 mV a 900 mA):
         # Se usa i_bat_inst para cancelación en fase sin desfasaje temporal
+        # Resistencias de los cables banana-coco utilizados para conectar la batería al circuito
+        # Se calcularon a partir de la caída de tensión en los cables y la corriente medidas con
+        # el multímetro, tanto en la carga como en la descarga
+        R_ROJO_CARGA = 0.0001679487  # Resistencia del cable rojo en carga (131 mV / 780 mA = 167.9487 mOhm)
+        R_ROJO_DESC = 0.000180851  # Resistencia del cable rojo en descarga (153 mV / 846 mA = 180.851 mOhm)
+        R_NEGRO_CARGA = 0.00006363  # Resistencia del cable negro en carga (49 mV / 770 mA = 63.63 mOhm)
+        R_NEGRO_DESC = 0.000060859  # Resistencia del cable negro en descarga (51 mV / 838 mA = 60.859 mOhm)
         if estado_Carga:
-            v_bat_aj = v_bat_cal - (0.000205 * i_bat_inst)
+            #v_bat_aj = v_bat_cal - (0.000205 * i_bat_inst)
+            v_bat_aj = v_bat_cal - (R_ROJO_CARGA * i_bat_inst) - (R_NEGRO_CARGA * i_bat_inst)
         elif estado_Descarga:
-            v_bat_aj = v_bat_cal + (0.000155 * i_bat_inst)
+            #v_bat_aj = v_bat_cal + (0.000155 * i_bat_inst)
+            v_bat_aj = v_bat_cal + (R_ROJO_DESC * i_bat_inst) + (R_NEGRO_DESC * i_bat_inst)
         else:
             v_bat_aj = v_bat_cal
 
