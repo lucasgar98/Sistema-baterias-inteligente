@@ -1,5 +1,5 @@
-import os
-import time
+import os  # Módulo para interactuar con el sistema operativo
+import time  # Módulo para trabajar con valores de tiempo y demoras
 import json  # Módulo para trabajar con archivos JSON
 import io  # Flujo de datos en memoria para exportación
 from datetime import datetime  # Módulo para trabajar con fecha y hora
@@ -18,7 +18,7 @@ from influxdb import InfluxDBClient
 # Importamos componentes propios de FastAPI (framework para construir APIs con Python)
 from fastapi import FastAPI, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- CONFIGURACIÓN DE BASES DE DATOS ---
@@ -114,6 +114,7 @@ ciclo_activo = {
     "cap_nominal": 6.5,  # Capacidad nominal
     "v_corte_carga": 9.0,  # Tensión de corte de carga
     "v_corte_descarga": 6.0,  # Tensión de corte de descarga
+    "i_objetivo": 900,  # Corriente objetivo
     "esp32_online": False  # Bandera que indica si se recibieron datos del ESP32
 }
 
@@ -194,13 +195,15 @@ def on_message(client, userdata, msg):
             ciclo_activo["t_actual"] = t
             # Actualizamos la bandera para indicar que recibimos datos del ESP32
             ciclo_activo["esp32_online"] = True
-            # Si se recibieron el perfil y los umbrales de tensión, los guardamos en el diccionario
+            # Si se recibieron el perfil y los umbrales de tensión y corriente, los guardamos en el diccionario
             if 'p' in datos:
                 ciclo_activo["perfil_actual"] = datos['p']
             if 'vc' in datos:
                 ciclo_activo["v_corte_carga"] = float(datos['vc'])
             if 'vd' in datos:
                 ciclo_activo["v_corte_descarga"] = float(datos['vd'])
+            if 'iobj' in datos:
+                ciclo_activo["i_objetivo"] = int(datos['iobj'])
 
             ahora = datetime.utcnow()  # Obtenemos la fecha y hora actual (en formato UTC)
             # 1. Guardar siempre en InfluxDB
@@ -752,21 +755,20 @@ def historial_por_qr(qr_id: str, response: Response):
 # Creamos la ruta /perfil y manejamos las peticiones POST a esa ruta
 # Esta ruta permite agregar un perfil de batería nuevo
 @app.post("/perfil")
-def set_perfil(tipo: str):
+def set_perfil(tipo: str, v_c: float, v_d: float, i_obj: int):
     """Perfiles: LI-ION-2S, LI-ION-3S, PB-12V"""
-    config = {
-        "LI-ION-2S": {"v_c": 8.4, "v_d": 6.0},
-        "LI-ION-3S": {"v_c": 12.6, "v_d": 9.0},
-        "PB-12V": {"v_c": 14.4, "v_d": 11.0},
-        "NiMH-7.2V": {"v_c": 9.0, "v_d": 6.0} # Carga máx ~1.5V/celda, Descarga ~1.0V/celda (6 celdas)
-    }
+    config = ["LI-ION-2S", "LI-ION-3S", "PB-12V", "NiMH-7.2V"]
     # Buscamos el perfil en la lista de perfiles permitidos
-    if tipo in config:
-        # Guardamos el tipo de batería
+    if tipo in config or tipo == "PERSONALIZADO":
+        # Guardamos el tipo de batería y los umbrales de tensión y corriente
         ciclo_activo["perfil_actual"] = tipo
+        ciclo_activo["v_corte_carga"] = v_c
+        ciclo_activo["v_corte_descarga"] = v_d
+        ciclo_activo["i_objetivo"] = i_obj
         # Construimos el payload que se publicará en el tópico "ESP32/config_perfil" para que el ESP32 pueda acceder al nuevo perfil
-        # El payload contendrá la tensión de corte de carga y la tensión de corte de descarga
-        payload = f"V_C:{config[tipo]['v_c']},V_D:{config[tipo]['v_d']}"
+        # El payload contendrá la tensión de corte de carga y la tensión de corte de descarga, junto con la corriente objetivo
+        #payload = f"V_C:{config[tipo]['v_c']},V_D:{config[tipo]['v_d']}"
+        payload = f"V_C:{v_c:.2f},V_D:{v_d:.2f},I_OBJ:{i_obj}"
         mqtt_client.publish("ESP32/config_perfil", payload)
         # Devolvemos un mensaje de éxito
         return {"status": "Perfil enviado", "perfil": tipo}
@@ -806,17 +808,6 @@ def exportar_csv():
     # El encabezado "Content-Disposition" indica si el contenido debe ser mostrado en línea (inline) en el navegador como parte de una página
     # web o debe ser descargado como attachment localmente. En este caso, el contenido debe ser descargado
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=reporte_baterias.csv"})
-
-"""Montamos una subaplicación llamada /web dentro de la aplicación principal. En este caso, esta subaplicación nos permitirá servir 
-archivos estáticos mediante StaticFiles (index.html). Esto es útil en proyectos donde FastAPI funciona como backend y al mismo tiempo entrega
-el frontend """
-app.mount("/web", StaticFiles(directory="frontend"), name="frontend")
-
-# Ruta correspondiente a la página principal 
-@app.get("/")
-def serve_home():
-    # Devolvemos un archivo como respuesta (en este caso, el archivo correspondiente a la página principal)
-    return FileResponse("frontend/index.html")
 
 # Ruta para acceder al estado actual del sistema
 @app.get("/estado_actual")

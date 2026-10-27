@@ -198,7 +198,7 @@ def desconectar_mqtt():
 # Función callback que se ejecuta al recibir mensajes de los tópicos MQTT
 def on_message_mqtt(topic, msg):
     global estado_Carga, estado_Descarga, modo_auto, paso_auto, total_ciclos_auto, ciclo_auto_actual, perfil_actual, bateria_qr_actual, nivelPWM
-    global PERFILES_LOCALES, VOLTAJE_CORTE_CARGA, VOLTAJE_CORTE_DESCARGA
+    global PERFILES_LOCALES, VOLTAJE_CORTE_CARGA, VOLTAJE_CORTE_DESCARGA, CORRIENTE_OBJETIVO
     # Fijamos la codificación UTF-8 para los mensajes de los tópicos MQTT
     topic_str = topic.decode('utf-8')  # Nombre del tópico
     payload = msg.decode('utf-8')  # Payload (contenido de los mensajes )
@@ -206,13 +206,15 @@ def on_message_mqtt(topic, msg):
     print(f"MQTT RECIBIDO [{topic_str}]: {payload}")
     
     if topic_str == MQTT_TOPIC_CONFIG:  
-        # Datos recibidos del tema config_perfil, con formato: V_C:8.4,V_D:6.0
+        # Datos recibidos del tema config_perfil, con formato: V_C:8.4,V_D:6.0,I_OBJ:900
         try:
-            # Guardamos los umbrales de tensión en un diccionario, en el cual las claves son los símbolos provenientes del mensaje
+            # Guardamos los umbrales de tensión y corriente en un diccionario, en el cual las claves son los símbolos provenientes del mensaje
             datos = dict(item.split(":") for item in payload.split(","))
             # Convertimos los valores de tensión a float
             VOLTAJE_CORTE_CARGA = float(datos['V_C'])
             VOLTAJE_CORTE_DESCARGA = float(datos['V_D'])
+            # Convertimos el valor de corriente a int
+            CORRIENTE_OBJETIVO = int(datos["I_OBJ"])
             
             # Buscar perfil correspondiente para mantener sincronizada la pantalla
             perfil_actual = "PERSONALIZADO"
@@ -223,7 +225,7 @@ def on_message_mqtt(topic, msg):
                 if abs(VOLTAJE_CORTE_CARGA - vc) < 0.05 and abs(VOLTAJE_CORTE_DESCARGA - vd) < 0.05:
                     perfil_actual = name  # Actualizamos el perfil de la batería
                     break
-            print(f"Perfil actualizado -> Carga: {VOLTAJE_CORTE_CARGA}V, Descarga: {VOLTAJE_CORTE_DESCARGA}V, Perfil: {perfil_actual}")
+            print(f"Perfil actualizado -> Carga: {VOLTAJE_CORTE_CARGA}V, Descarga: {VOLTAJE_CORTE_DESCARGA}V, Corriente objetivo: {CORRIENTE_OBJETIVO}mA, Perfil: {perfil_actual}")
         except:
             print("Error parseando perfil")
  
@@ -924,8 +926,8 @@ while True:
             # Enviamos las siguientes variables:
             # v: Tensión de la batería [V], i: Corriente de la batería [mA], t: Temperatura [°C]
             # s: Estado del sistema, qr: Código QR, ah: Capacidad [Ah], p: Perfil o tipo de batería
-            # vc: Umbral de tensión de carga [V], vd: Umbral de tensión de descarga
-            mensaje_mqtt = f"v:{v_disp:.2f},i:{i_bat_prom:.0f},t:{temperatura:.1f},s:{estado_str},qr:{bateria_qr_actual},ah:{capacidad_ah:.3f},p:{perfil_actual},vc:{VOLTAJE_CORTE_CARGA:.2f},vd:{VOLTAJE_CORTE_DESCARGA:.2f}"
+            # vc: Umbral de tensión de carga [V], vd: Umbral de tensión de descarga, iobj: Corriente objetivo [mA]
+            mensaje_mqtt = f"v:{v_disp:.2f},i:{i_bat_prom:.0f},t:{temperatura:.1f},s:{estado_str},qr:{bateria_qr_actual},ah:{capacidad_ah:.3f},p:{perfil_actual},vc:{VOLTAJE_CORTE_CARGA:.2f},vd:{VOLTAJE_CORTE_DESCARGA:.2f},iobj:{CORRIENTE_OBJETIVO}"
             if mqtt_client:
                 try:
                     mqtt_client.publish(MQTT_TOPIC_TELEMETRY, mensaje_mqtt)
