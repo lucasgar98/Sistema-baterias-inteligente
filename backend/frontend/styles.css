@@ -27,6 +27,7 @@ root del documento (etiqueta <html>) */
     --accent-green: #4ade80;
     --accent-yellow: #fbbf24;
     --accent-orange: #fb923c;
+    --accent-magent: #eb57d7;
     /* ===== Familia de fuentes ===== */
     --font-ui: 'Inter', -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
@@ -238,6 +239,13 @@ La clase .small hereda las propiedades de la clase .metric-value */
 .metric-value.i { color: var(--accent-violet); }  /* Corriente */
 .metric-value.ah { color: var(--accent-green); }  /* Capacidad */
 .metric-value.ri { color: var(--accent-orange); }  /* Resistencia interna */
+.metric-value.temp { color: var(--accent-red); }  /* Temperatura */
+.metric-value.temp-max { color: #fb4545; }  /* Temperatura máxima */
+
+/* Perfil de la batería */
+#perfil {color: var(--accent-magent);}
+/* Tarjeta que muestra la corriente objetivo */
+.metric.i-obj { grid-column: 1 / -1; }
 
 /* Unidad de las variables tensión y corriente*/
 .unit { font-size: 16px; }
@@ -263,34 +271,6 @@ La clase .small hereda las propiedades de la clase .metric-value */
 .estado-error { background: #7f1d1d; color: var(--accent-red); font-size: 15px;}
 
 /* --- CONFIG SECTION --- */
-/* Contenedor de configuración */
-.config-group {
-    margin-bottom: 10px;
-}
-/* Etiqueta dentro del contenedor de configuración */
-.config-group label {
-    display: block;  /* Muestra el elemento como un elemento en bloque */
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-bottom: 3px;
-    font-weight: 500;
-}
-/* Lista desplegable dentro del contenedor de configuración y campo de texto para ingresar la capacidad nominal */
-.config-group select, .config-group input {
-    width: 100%;  /* Ancho del 100% relativo al contenedor padre */
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    font-family: var(--font-ui);
-    font-size: 12px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
-    transition: border-color var(--transition);  /* Transición para el color del borde */
-}
-/* Modificamos el borde al hacer click en la lista despegable o en el campo de texto 
-mediante la pseudo-clase :focus */
-.config-group select:focus, .config-group input:focus { border-color: var(--accent-cyan); }
 
 /* Contenedor para seleccionar la capacidad nominal */
 .config-row {
@@ -351,8 +331,7 @@ usando la pseudo-clase :active */
 .btn-stop { 
     background: #dc2626; 
     color: #fff; 
-    /*grid-column: 1 / -1;*/  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
-    /* font-size: 14px; */ 
+    grid-column: 1 / -1;  /* Hacemos que el botón se muestre desde la primera columna del grid hasta la última columna */
     padding: 12px; 
 }
 
@@ -509,7 +488,8 @@ usando la pseudo-clase :active */
 
 /* Contenedor del gráfico */
 .chart-container {
-    height: 95px; 
+    /*height: 95px; */
+    height: 11.5rem; 
     position: relative;
 }
 
@@ -636,6 +616,11 @@ tbody tr.clickable { cursor: pointer; }
     max-width: 440px; 
     text-align: center;
 }
+/* Modificamos el ancho máximo de cada una de las ventanas que se abren al presionar ciertos botones */
+.modal.editar { max-width: 480px; }
+.modal.importar { max-width: 580px; }
+.modal.confirmar { max-width: 440px; }
+.modal.cambiar-perfil { max-width: 450px; }
 
 /* Personalizamos la apariencia de la barra de scrolleo de las ventanas .modal */
 .modal::-webkit-scrollbar { width: 4px; }
@@ -758,6 +743,167 @@ tbody tr.clickable { cursor: pointer; }
     padding: 8px 18px;
 }
 
+/* MODAL: Editar Batería */
+/* Formulario para editar la batería */
+#form-editar-bateria {
+    display: flex; 
+    flex-direction: column; 
+    gap: 14px; 
+    margin-top: 10px;
+}
+/* Etiquetas que se muestran en la ventana para editar la batería */
+.label-editar {
+    display: block; 
+    font-size: 0.85rem; 
+    color: #94a3b8; 
+    margin-bottom: 5px;
+}
+/* Entradas y lista desplegable para editar parámetros de la batería */
+.input-editar, #edit-estado-general {
+    width: 100%; 
+    padding: 8px 12px; 
+    background: #0f172a; 
+    border: 1px solid #334155; 
+    border-radius: 6px; 
+    color: #f8fafc;
+}
+
+#edit-qr-nuevo { font-family: monospace; }
+/* Contenedor de los botones "Cancelar" y "Guardar cambios" */
+#buttons-editar {
+    display: flex; 
+    justify-content: flex-end; 
+    gap: 10px; 
+    margin-top: 10px;
+}
+/* Botón "Guardar cambios" */
+#btn-guardar {
+    padding: 6px 16px;
+}
+
+/* MODAL: Importar Baterías JSON */
+/* Texto que se encuentra por debajo del título */
+#text-importar-json {
+    margin-top: 10px; 
+    font-size: 0.85rem; 
+    color: #94a3b8;
+}
+/* Lista de formatos admitidos */
+#formats-importar-json {
+    margin: 6px 0 10px 18px; 
+    font-family: monospace; 
+    font-size: 0.8rem; 
+    color: #38bdf8;
+}
+/* Botón para importar el archivo JSON */
+#file-importar-json {
+    font-size: 0.85rem; 
+    color: #94a3b8; 
+    margin-bottom: 12px;   
+}
+/* Área de texto para pegar código JSON */
+#textarea-importar-json {
+    width: 100%; 
+    padding: 10px; 
+    background: #0f172a;
+    border: 1px solid #334155; 
+    border-radius: 6px; 
+    color: #f8fafc; 
+    font-family: monospace; 
+    font-size: 0.85rem; 
+    resize: vertical;
+}
+/* Mensaje que se muestra al importar el archivo */
+#import-msg-feedback {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    display: none;
+}
+/* Contenedor de los botones "Cerrar" e "Importar al banco" */
+#buttons-importar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+/* MODAL: Confirmar Acción Crítica */
+/* Párrafo que se muestra en la ventana de confirmar acción crítica, la cual se abre al limpiar el inventario */
+#modal-confirm-mensaje {
+    margin: 15px 0 20px 0; 
+    font-size: 0.9rem; 
+    color: #cbd5e1; 
+    line-height: 1.4;
+}
+/* Contenedor de los botones "Cancelar" y "Confirmar" */
+#buttons-confirmar {
+    display: flex; 
+    justify-content: center; 
+    gap: 10px;
+}
+
+/* MODAL: Cambiar Perfil de batería */
+/* Etiqueta dentro del contenedor de configuración */
+.config-group label {
+    display: block;  /* Muestra el elemento como un elemento en bloque */
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+    font-weight: 500;
+    width: 180px;
+}
+/* Lista desplegable dentro del contenedor de configuración y campo de texto para ingresar la capacidad nominal */
+.config-group select, .config-group input {
+    width: 100%;  /* Ancho del 100% relativo al contenedor padre */
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    outline: none;  /* Quitamos la línea que se dibuja en los bordes para resaltar el elemento */
+    transition: border-color var(--transition);  /* Transición para el color del borde */
+}
+.config-group input { max-width: 130px; }
+/* Unidades que se ubican a la derecha de las entradas del formulario */
+.config-group span {
+    width: 10px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Modificamos el borde al hacer click en la lista despegable o en el campo de texto 
+mediante la pseudo-clase :focus */
+.config-group select:focus, .config-group input:focus { border-color: var(--accent-cyan); }
+/* Formulario para cambiar el perfil */
+#form-perfil { padding: 10px; }
+/* Contenedores de cada una de las entradas del formulario para ingresar los umbrales de tensión y corriente */
+.form-perfil-inputs {
+    display: flex;
+    gap: 10px; 
+    justify-content: space-evenly; 
+    align-items: center; 
+    margin: 10px 0px;
+}
+/* Contenedor del botón "Actualizar y contenedor del mensaje de error */
+#button-perfil, #error-perfil {
+    display: flex;
+    justify-content: center;
+}
+/* Botón Actualizar */
+#button-perfil input { 
+    width: 40%;
+    font-size: 12px;
+    margin-top: 10px;
+}
+/* Mensaje de error que se muestra debajo del botón Actualizar cuando no se ingresa algún umbral de tensión o corriente */
+#error-msg-perfil {
+    font-size: 12px;
+    text-align: center;
+    color: var(--accent-red);
+}
+
 /* Regla que permite controlar los pasos en una secuencia de animación. En este caso, la usamos para que la ruedita
 que indica que se está estableciendo la conexión con la ESP-CAM gire */
 @keyframes spin {
@@ -767,72 +913,64 @@ que indica que se está estableciendo la conexión con la ESP-CAM gire */
 
 /* Control agrupado de Test Auto con selector de ciclos N */
 .auto-test-group {
-    display: flex;
+    display: grid;
     gap: 6px;
-    align-items: stretch;
-}
-
-.auto-test-group .btn-auto {
-    flex: 1;
+    grid-column: 1 / span 2; 
+    grid-template-columns: 1fr 1fr;
 }
 
 /* Selector estilizado de ciclos N para Test Auto */
 .cycle-stepper {
     display: flex;
     align-items: center;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0 2px;
-    gap: 2px;
+    justify-content: space-between;
 }
 
-.cycle-stepper .stepper-btn {
+/* Botones para aumentar o disminuir el número de ciclos */
+.stepper-btn {
     background: transparent;
-    border: none;
-    color: var(--accent-cyan);
-    font-size: 15px;
+    background-color: #1c56d4;
+    border: 1px solid var(--border);
+    color: #ffffff;
+    font-size: 20px;
     font-weight: 700;
     line-height: 1;
-    width: 20px;
+    width: 40px;
     height: 100%;
     min-height: 28px;
-    border-radius: 4px;
+    border-radius: var(--radius);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     transition: background var(--transition), color var(--transition);
     user-select: none;
 }
-
-.cycle-stepper .stepper-btn:hover {
-    background: rgba(56, 189, 248, 0.2);
-    color: #ffffff;
+/* Cambiamos la opacidad al posicionar el cursor sobre el botón */
+.stepper-btn:hover {
+    opacity: 0.7;
 }
-
-.cycle-stepper .stepper-btn:active {
+/* Encogemos el botón al hacer click */
+.stepper-btn:active {
     transform: scale(0.92);
 }
-
-.cycle-stepper input#input-ciclos-auto {
+/* Entrada que muestra el número de ciclos */
+#input-ciclos-auto {
     width: 24px;
     background: transparent;
-    border: none;
+    background-color: #1c56d4;
+    border: 1px solid var(--border);
+    border-radius: 8px;
     color: #ffffff;
     font-family: 'JetBrains Mono', monospace;
     font-weight: 700;
     text-align: center;
-    font-size: 13px;
-    padding: 0;
-    margin: 0;
+    font-size: 16px;
+    height: 100%;
+    width: 40px;
     cursor: default;
     user-select: none;
-    -moz-appearance: textfield;
 }
-
-.cycle-stepper input#input-ciclos-auto::-webkit-inner-spin-button,
-.cycle-stepper input#input-ciclos-auto::-webkit-outer-spin-button {
+ 
+#input-ciclos-auto::-webkit-inner-spin-button,
+#input-ciclos-auto::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
@@ -842,6 +980,7 @@ que indica que se está estableciendo la conexión con la ESP-CAM gire */
     background: rgba(56, 189, 248, 0.15) !important;
     color: var(--accent-cyan) !important;
     border-color: rgba(56, 189, 248, 0.4) !important;
+    padding: 6px 16px;
 }
 
 .btn-import:hover {
@@ -862,6 +1001,7 @@ que indica que se está estableciendo la conexión con la ESP-CAM gire */
     background: var(--accent-red) !important;
     color: #ffffff !important;
     border: none !important;
+    padding: 6px 16px;
 }
 
 .btn-danger:hover {

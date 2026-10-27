@@ -15,7 +15,7 @@
 
     <!-- HEADER -->
     <header class="header" id="app-header">
-        <h1>Controlador de Baterías</h1> <!-- Título del header-->
+        <h1>Electromovilidad - Segunda vida de baterías - DIIT UNLaM</h1> <!-- Título del header-->
         <div class="header-right"> <!-- Contenedor para agrupar los elementos que se encuentran en la parte derecha del header -->
             <div class="qr-input-group"> <!-- Agrupa las opciones relacionadas con el QR -->
                 <label for="input-qr">Batería QR</label>
@@ -24,6 +24,8 @@
                 <!-- Botones "Asignar" y "Escanear" -->
                 <button class="btn-sm" id="btn-asignar-qr" onclick="asignarQR()">Asignar</button>
                 <button class="btn-sm" id="btn-escanear-qr" onclick="escanearConCamara()">📷 Escanear</button>
+                <!-- Botón para cambiar el perfil de la batería -->
+                <button class="btn-sm" id="btn-cambiar-perfil" onclick="cambiarPerfil()">Cambiar perfil</button>
             </div>
             <div class="conn-indicator"> <!-- Contenedor que agrupa los elementos relacionados con el estado de la conexión -->
                 <div class="conn-dot" id="conn-dot"></div> <!-- Punto ubicado a la izquierda del texto -->
@@ -40,7 +42,7 @@
             <div class="panel-title">Telemetría</div> <!-- Título (podría ser una etiqueta <h2>)-->
 
             <!-- Estado -->
-            <div style="margin-bottom: 10px;"> <!-- Contenedor del estado del sistema -->
+            <div> <!-- Contenedor del estado del sistema -->
                 <span class="estado-badge estado-reposo" id="badge-estado">REPOSO</span>
             </div>
 
@@ -51,7 +53,7 @@
             </div>
 
             <!-- V, I -->
-            <div class="metrics-grid"> <!-- Contenedor que agrupa los valores de tensión, corriente, capacidad y resistencia interna -->
+            <div class="metrics-grid"> <!-- Contenedor que agrupa los valores de tensión, corriente, capacidad, resistencia interna y temperatura -->
                 <!-- Cada variable tiene asociada un contenedor que incluye una etiqueta y su valor -->
                 <div class="metric"> <!-- Tensión -->
                     <div class="metric-label">Tensión</div> <!-- Etiqueta (parte superior)-->
@@ -65,6 +67,20 @@
                     <div class="metric-value i">
                         <span id="val-i">0</span>
                         <span class="unit"> mA</span>
+                    </div>
+                </div>
+                <div class="metric"> <!-- Temperatura -->
+                    <div class="metric-label">Temperatura</div>
+                    <div class="metric-value temp">
+                        <span id="val-t">0</span>
+                        <span class="unit"> °C</span>
+                    </div>
+                </div>
+                <div class="metric"> <!-- Temperatura máxima -->
+                    <div class="metric-label">Temp. máxima</div>
+                    <div class="metric-value temp-max">
+                        <span id="val-tmax">0</span>
+                        <span class="unit"> °C</span>
                     </div>
                 </div>
                 <div class="metric"> <!-- Capacidad -->
@@ -83,38 +99,47 @@
                 </div>
             </div>
 
-            <!-- Temperatura -->
-            <div class="temp-section"> <!-- Contenedor para agrupar la temperatura -->
-                <div class="temp-row">
-                    <span class="metric-label">Temperatura</span> <!-- Etiqueta (parte izquierda)-->
-                    <span class="td-mono"> <!-- Valor actual y valor máximo de temperatura-->
-                        <span id="val-t">0.0</span>°C / <span id="val-tmax">0.0</span>°C
-                    </span>
+            <!-- Perfil actual -->
+            <div class="metric metric-full"> <!-- Contenedor del perfil actual de la batería activa -->
+                <div class="metric-label">Perfil de batería</div>
+                <div class="metric-value small" id="perfil">NiMH 7.2V</div>
+            </div>
+
+            <!-- Parámetros del perfil de batería seleccionado -->
+            <div class="metrics-grid"> <!-- Contenedor que agrupa los parámetros del perfil -->
+                <!-- Cada variable tiene asociada un contenedor que incluye una etiqueta y su valor -->
+                <div class="metric"> <!-- Tensión de corte de carga -->
+                    <div class="metric-label">Tensión de corte de carga</div> <!-- Etiqueta (parte superior)-->
+                    <div class="metric-value v">
+                        <span id="val-v-carga">0.00</span> <!-- Valor (parte inferior)-->
+                        <span class="unit"> V</span>
+                    </div> 
+                </div>
+                <div class="metric"> <!-- Tensión de corte de descarga -->
+                    <div class="metric-label">Tensión de corte de descarga</div>
+                    <div class="metric-value v">
+                        <span id="val-v-desc">0.00</span>
+                        <span class="unit"> V</span>
+                    </div>
+                </div>
+                <div class="metric i-obj"> <!-- Corriente objetivo -->
+                    <div class="metric-label">Corriente objetivo</div>
+                    <div class="metric-value i" >
+                        <span id="val-i-obj">0.000</span>
+                        <span class="unit"> mA</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Config -->
-            <div class="config-group"> <!-- Contenedor para seleccionar el perfil de la batería-->
-                <label>Perfil de batería</label>
-                <!-- Lista desplegable para seleccionar el perfil de la batería -->
-                <select id="select-perfil" onchange="cambiarPerfil(this.value)">
-                    <!-- <option value="">Seleccionar...</option> -->
-                    <option value="LI-ION-2S">Li-Ion 2S (8.4V)</option>
-                    <option value="LI-ION-3S">Li-Ion 3S (12.6V)</option>
-                    <option value="PB-12V">Plomo 12V (14.4V)</option>
-                    <option value="NiMH-7.2V" selected>NiMH 7.2V</option> <!-- Valor por defecto -->
-                    <option value="PERSONALIZADO">Personalizado (Manual)</option>
-                </select>
-            </div>
-            <div class="config-row"> <!-- Contenedor para seleccionar la capacidad nominal -->
-                <div class="config-group"> <!-- Contenedor del campo de texto (parte izquierda)-->
-                    <label>Cap. nominal (Ah)</label>
+            <!-- <div class="config-row">--> <!-- Contenedor para seleccionar la capacidad nominal -->
+                <!-- <div class="config-group"> --> <!-- Contenedor del campo de texto (parte izquierda)-->
+                    <!-- <label>Cap. nominal (Ah)</label> -->
                     <!-- Campo de texto para ingresar la capacidad -->
-                    <input type="number" id="input-cap" step="0.1" value="6.5">
-                </div>
+                    <!-- <input type="number" id="input-cap" step="0.1" value="6.5">
+                </div> -->
                 <!-- Botón OK (parte derecha) -->
-                <button class="btn-sm" id="btn-ok" onclick="configurarNominal()">OK</button>
-            </div>
+                <!-- <button class="btn-sm" id="btn-ok" onclick="configurarNominal()">OK</button>
+            </div> -->
 
             <!-- Botones -->
             <div class="btn-grid">
@@ -125,6 +150,7 @@
                 <!-- Botón para iniciar un ciclo completo con cantidad configurable de ciclos -->
                 <div class="auto-test-group">
                     <button class="btn btn-auto" id="btn-auto" onclick="iniciarTestAuto()">TEST AUTO</button>
+                    <!-- Botones para aumentar o disminuir el número de ciclos de carga y descarga (valores de 1 a 10) -->
                     <div class="cycle-stepper" title="Cantidad de ciclos N (1 a 10)">
                         <button type="button" class="stepper-btn" onclick="modificarCiclosAuto(-1)" aria-label="Menos ciclos">−</button>
                         <input type="number" id="input-ciclos-auto" min="1" max="10" value="1" readonly>
@@ -393,32 +419,32 @@
 
 <!-- MODAL: Editar Batería -->
 <div class="modal-overlay" id="modal-editar">
-    <div class="modal" style="max-width: 480px;">
+    <div class="modal editar">
         <div class="modal-header">
             <h2>Editar Batería</h2>
             <button class="modal-close" onclick="cerrarModalEditar()">&times;</button>
         </div>
-        <form id="form-editar-bateria" onsubmit="guardarEdicionBateria(event)" style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+        <form id="form-editar-bateria" onsubmit="guardarEdicionBateria(event)">
             <input type="hidden" id="edit-qr-original">
             <div>
-                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Código QR / ID</label>
-                <input type="text" id="edit-qr-nuevo" required style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-family: monospace;">
+                <label class="label-editar">Código QR / ID</label>
+                <input class="input-editar" type="text" id="edit-qr-nuevo" required>
             </div>
             <div>
-                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Estado Inicial (al salir del Pack)</label>
-                <input type="text" id="edit-estado-inicial" placeholder="Ej: 0.8V sulfatada / Recuperada / Buena" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+                <label class="label-editar">Estado Inicial (al salir del Pack)</label>
+                <input class="input-editar" type="text" id="edit-estado-inicial" placeholder="Ej: 0.8V sulfatada / Recuperada / Buena">
             </div>
             <div>
-                <label style="display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Estado Operativo General</label>
-                <select id="edit-estado-general" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+                <label class="label-editar">Estado Operativo General</label>
+                <select id="edit-estado-general">
                     <option value="OPERATIVO">OPERATIVO</option>
                     <option value="DEGRADADA">DEGRADADA</option>
                     <option value="DESCARTE">DESCARTE</option>
                 </select>
             </div>
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <div id="buttons-editar">
                 <button type="button" class="btn-sm" onclick="cerrarModalEditar()">Cancelar</button>
-                <button type="submit" class="btn-sm btn-charge" style="padding: 6px 16px;">Guardar Cambios</button>
+                <button type="submit" class="btn-sm btn-charge" id="btn-guardar">Guardar Cambios</button>
             </div>
         </form>
     </div>
@@ -426,42 +452,83 @@
 
 <!-- MODAL: Importar Baterías JSON -->
 <div class="modal-overlay" id="modal-importar">
-    <div class="modal" style="max-width: 580px;">
+    <div class="modal importar">
         <div class="modal-header">
             <h2>Importar Baterías (JSON)</h2>
             <button class="modal-close" onclick="cerrarModalImportar()">&times;</button>
         </div>
-        <div style="margin-top: 10px; font-size: 0.85rem; color: #94a3b8;">
+        <div id="text-importar-json">
             Podés cargar un archivo <code>.json</code> o pegar el texto directamente.
             <br>Formatos admitidos:
-            <ul style="margin: 6px 0 10px 18px; font-family: monospace; font-size: 0.8rem; color: #38bdf8;">
+            <ul id="formats-importar-json">
                 <li>["BAT-01", "BAT-02", "BAT-03"]</li>
                 <li>[{"qr": "BAT-01", "estado_inicial": "0.9V sulfatada"}, ...]</li>
             </ul>
         </div>
-        <div style="margin-bottom: 12px;">
-            <input type="file" id="file-importar-json" accept=".json" onchange="procesarArchivoImportar(event)" style="font-size: 0.85rem; color: #94a3b8;">
-        </div>
-        <textarea id="textarea-importar-json" rows="8" placeholder='Pegá el JSON aquí...' style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
-        <div id="import-msg-feedback" style="margin-top: 8px; font-size: 0.85rem; display: none;"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+        <input type="file" id="file-importar-json" accept=".json" onchange="procesarArchivoImportar(event)">
+        <textarea id="textarea-importar-json" rows="8" placeholder='Pegá el JSON aquí...'></textarea>
+        <div id="import-msg-feedback"></div>
+        <div id="buttons-importar">
             <button type="button" class="btn-sm" onclick="cerrarModalImportar()">Cerrar</button>
-            <button type="button" class="btn-sm btn-import" style="padding: 6px 16px;" onclick="ejecutarImportacion()">Importar al Banco</button>
+            <button type="button" class="btn-sm btn-import" onclick="ejecutarImportacion()">Importar al Banco</button>
         </div>
     </div>
 </div>
 
 <!-- MODAL: Confirmar Acción Crítica -->
 <div class="modal-overlay" id="modal-confirmar">
-    <div class="modal" style="max-width: 440px;">
+    <div class="modal confirmar">
         <div class="modal-header">
             <h2 id="modal-confirm-titulo">Confirmar Acción</h2>
             <button class="modal-close" onclick="cerrarModalConfirmar()">&times;</button>
         </div>
-        <p id="modal-confirm-mensaje" style="margin: 15px 0 20px 0; font-size: 0.9rem; color: #cbd5e1; line-height: 1.4;"></p>
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <p id="modal-confirm-mensaje"></p>
+        <div id="buttons-confirmar">
             <button type="button" class="btn-sm" onclick="cerrarModalConfirmar()">Cancelar</button>
-            <button type="button" class="btn-sm btn-danger" id="btn-confirm-action" style="padding: 6px 16px;">Confirmar</button>
+            <button type="button" class="btn-sm btn-danger" id="btn-confirm-action">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Cambiar Perfil de batería -->
+<div class="modal-overlay" id="modal-cambiar-perfil">
+    <div class="modal cambiar-perfil">
+        <div class="modal-header">
+            <h2>Cambiar perfil de batería</h2>
+            <button class="modal-close" onclick="cerrarModalCambiarPerfil()">&times;</button>
+        </div>
+        <div class="config-group">
+            <select id="select-perfil" onchange="seleccionarPerfil(this.value)">
+                <option value="">Seleccionar...</option>
+                <option value="LI-ION-2S">Li-Ion 2S</option>
+                <option value="LI-ION-3S">Li-Ion 3S</option>
+                <option value="PB-12V">Plomo 12V</option>
+                <option value="NiMH-7.2V" selected>NiMH 7.2V</option> <!-- Valor por defecto -->
+                <option value="PERSONALIZADO">Personalizado (Manual)</option>
+            </select>
+            <form id="form-perfil">
+                <div class="form-perfil-inputs">
+                    <label>Tensión de corte de carga: </label>
+                    <input type="text" id="input-v-carga" onchange="cambioValor()">
+                    <span>V</span>
+                </div>
+                <div class="form-perfil-inputs">
+                    <label>Tensión de corte de descarga: </label>
+                    <input type="text" id="input-v-desc" onchange="cambioValor()">
+                    <span>V</span>
+                </div>
+                <div class="form-perfil-inputs">
+                    <label>Corriente objetivo: </label>
+                    <input type="text" id="input-i-obj" onchange="cambioValor()">
+                    <span>mA</span>
+                </div>
+                <div id="button-perfil">
+                    <input type="submit" value="Actualizar" class="btn-sm">
+                </div>
+            </form>
+            <div id="error-perfil">
+                <p id="error-msg-perfil"></p>
+            </div>
         </div>
     </div>
 </div>

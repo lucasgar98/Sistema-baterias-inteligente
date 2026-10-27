@@ -2,6 +2,13 @@ const API = window.location.origin;  // URL base de la página web
 let maxPoints = 100;  // Número máximo de puntos de los gráficos en el panel derecho
 let chartTendencia = null;  // Objeto que almacena el gráfico de tendencia de SoH
 let connOk = true;  // Bandera que indica si hay conexión con el ESP32
+// Mapa que contiene los umbrales de tensión para cada uno de los perfiles
+const PERFILES = new Map([
+    ["LI-ION-2S", {vCorteCarga: 8.4, vCorteDescarga: 6.0}],
+    ["LI-ION-3S", {vCorteCarga: 12.6, vCorteDescarga: 9.0}],
+    ["PB-12V", {vCorteCarga: 14.4, vCorteDescarga: 11.0}],
+    ["NiMH-7.2V", {vCorteCarga: 9.0, vCorteDescarga: 6.0}]
+]);
 
 // --- CHART SETUP ---
 // ====== CONFIGURACIÓN DE LOS GRÁFICOS ======
@@ -315,18 +322,6 @@ function iniciarTestAuto() {
     enviarComando(`START_AUTO:${n}`);
 }
 
-// Función que se ejecuta cuando cambia el perfil en la lista desplegable del panel izquierdo
-async function cambiarPerfil(tipo) {
-    if (!tipo) return;  // Si no se selecciona ningún perfil, finalizamos la ejecución de la función
-    try {
-        // Hacemos una consulta POST a la ruta /perfil para cambiar el perfil, el cual se pasa como parámetro de consulta
-        const r = await fetch(`${API}/perfil?tipo=${tipo}`, { method: 'POST' });
-        // Convertimos la respuesta a formato JSON
-        const d = await r.json();
-        console.log('Perfil:', d);
-    } catch(e) { console.error(e); }
-}
-
 // Función que se ejecuta al presionar el botón OK que se encuentra a la derecha del campo de texto para ingresar
 // la capacidad nominal
 async function configurarNominal() {
@@ -404,6 +399,33 @@ async function escanearConCamara() {
     }, 800);
 }
 
+// Función que se ejecuta cuando se presiona el botón "Cambiar perfil"
+function cambiarPerfil() {
+    // Obtenemos el elemento correspondiente a la pantalla secundaria de cambiar perfil
+    const modal = document.getElementById('modal-cambiar-perfil');
+    // Abrir modal de espera
+    // Agregamos una nueva clase al contenedor de la pantalla secundaria, para modificar la propiedad display en el CSS
+    modal.classList.add('open');
+    // Borramos el mensaje de error que se muestra debajo del botón de Actualizar
+    document.getElementById("error-msg-perfil").textContent = "";
+    // Mostramos en los campos de texto (inputs) los valores correspondientes al tipo seleccionado
+    const perfil = document.getElementById('select-perfil').value;
+    if(perfil != "PERSONALIZADO"){
+        // Si el perfil seleccionado es alguno de los perfiles que está en la lista desplegable, mostramos
+        // los umbrales de tensión
+        document.getElementById("input-v-carga").value = PERFILES.get(perfil).vCorteCarga;
+        document.getElementById("input-v-desc").value = PERFILES.get(perfil).vCorteDescarga;
+        // Ponemos la corriente objetivo en un valor por defecto de 900 mA
+        document.getElementById("input-i-obj").value = 900;
+    }
+    else {
+        // Si el perfil seleccionado es personalizado, borramos todos los umbrales
+        document.getElementById("input-v-carga").value = "";
+        document.getElementById("input-v-desc").value = "";
+        document.getElementById("input-i-obj").value = "";
+    }
+}
+
 // Función que cierra la pantalla secundaria del lector de la cámara. Se ejecuta al presionar cancelar o cuando se decodifica
 function cerrarModalCamara() {
     // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
@@ -470,16 +492,12 @@ async function actualizarEstado() {
             document.getElementById('input-qr').placeholder = d.qr_actual;
         }
 
-        // Update profile selector value to match the active profile
-        // Actualizamos el perfil en la lista desplegable del panel izquierdo para que coincida con el perfil actual
-        const selectPerfil = document.getElementById('select-perfil');
-        if (d.perfil_actual && selectPerfil.value !== d.perfil_actual) {
-            // Verificamos que el perfil obtenido del servidor coincida con alguno de los perfiles que se
-            // encuentran como opciones en la lista desplegable
-            if ([...selectPerfil.options].some(opt => opt.value === d.perfil_actual)) {
-                selectPerfil.value = d.perfil_actual;
-            }
-        }
+        // Actualizamos el perfil de la batería
+        document.getElementById("perfil").textContent = d.perfil_actual;
+        // Actualizamos los umbrales de tensión y corriente del perfil seleccionado
+        document.getElementById("val-v-carga").textContent = d.v_corte_carga;
+        document.getElementById("val-v-desc").textContent = d.v_corte_descarga;
+        document.getElementById("val-i-obj").textContent = d.i_objetivo;
 
         // Estado badge
         // Actualizamos el estado del sistema en el panel izquierdo
@@ -1006,6 +1024,76 @@ async function ejecutarImportacion() {
     }
 }
 
+// Función que se ejecuta al seleccionar un perfil en la lista desplegable de la pantalla que se abre al presionar el botón "Cambiar perfil"
+function seleccionarPerfil(tipo) {
+    // Borramos el mensaje de error que se muestra debajo del botón de Actualizar
+    document.getElementById("error-msg-perfil").textContent = "";
+    if(tipo != "PERSONALIZADO") {
+        // Si se seleccionó alguno de los perfiles de batería de la lista, mostramos los
+        // umbrales de ese perfil en los campos de texto
+        document.getElementById("input-v-carga").value = PERFILES.get(tipo).vCorteCarga;
+        document.getElementById("input-v-desc").value = PERFILES.get(tipo).vCorteDescarga;
+        // Ponemos la corriente objetivo en un valor por defecto de 900 mA
+        document.getElementById("input-i-obj").value = 900;
+        //iObjetivo = 900;
+    }
+    else {
+        // Si se seleccionó la opción Personalizado, borramos los valores de los inputs
+        document.getElementById("input-v-carga").value = "";
+        document.getElementById("input-v-desc").value = "";
+        document.getElementById("input-i-obj").value = "";
+    }
+}
+
+// Función que se ejecuta cuando hay algún cambio en los campos del formulario
+function cambioValor() {
+    // Borramos el mensaje de error que se muestra debajo del botón de Actualizar
+    document.getElementById("error-msg-perfil").textContent = "";
+    // Si cambiamos alguno de los umbrales de tensión o corriente, cambiamos el valor de la lista desplegable a "PERSONALIZADO"
+    document.getElementById("select-perfil").value = "PERSONALIZADO";
+}
+
+// Función que se ejecuta al presionar el botón "Actualizar" de la pantalla para cambiar el perfil
+document.getElementById("form-perfil").addEventListener("submit", async function(event) {
+    // Evitamos que el navegador realice la acción por defecto al enviar el formulario (o sea, evitamos
+    // que el navegador recargue toda la página)
+    event.preventDefault();
+    // Obtenemos el tipo de perfil accediendo al valor de la lista desplegable
+    const tipo = document.getElementById("select-perfil").value;
+    // Obtenemos los valores de los campos del formulario
+    const vCorteCarga = document.getElementById("input-v-carga").value;
+    const vCorteDesc = document.getElementById("input-v-desc").value;
+    const iObjetivo = document.getElementById("input-i-obj").value;
+    // Vefificamos que los valores no estén vacíos
+    if(vCorteCarga == "" || vCorteDesc == "" || iObjetivo == ""){
+        document.getElementById("error-msg-perfil").textContent = "Faltan valores de tensión y/o corriente";
+        return;
+    }
+    else {
+        document.getElementById("error-msg-perfil").textContent = "";
+    }
+
+    // Para cambiar el perfil, realizamos una petición tipo POST a la ruta /perfil
+    try {
+        // Hacemos una consulta POST a la ruta /perfil para cambiar el perfil, el cual se pasa como parámetro de consulta
+        // Enviamos los umbrales de tensión y corriente como parámetros de consulta
+        const r = await fetch(`${API}/perfil?tipo=${tipo}&v_c=${vCorteCarga}&v_d=${vCorteDesc}&i_obj=${iObjetivo}`, { method: 'POST' });
+        // Convertimos la respuesta a formato JSON
+        const d = await r.json();
+        console.log("Respuesta: ", d);
+        // Cerramos la ventana para cambiar el perfil
+        document.getElementById('modal-cambiar-perfil').classList.remove('open');
+        // Actualizamos el perfil en el panel izquierdo
+        document.getElementById("perfil").textContent = tipo;
+    } 
+    catch(e) { console.error(e); }
+});
+
+/* Función que se ejecuta al cerrar la ventana para cambiar el perfil */
+function cerrarModalCambiarPerfil() {
+    document.getElementById('modal-cambiar-perfil').classList.remove('open');   
+}
+
 // Cerramos los modales al hacer click en el fondo oscuro
 document.getElementById('modal-detalle').addEventListener('click', function(e) {
     if (e.target === this) cerrarModal();
@@ -1022,6 +1110,9 @@ document.getElementById('modal-importar').addEventListener('click', function(e) 
 document.getElementById('modal-confirmar').addEventListener('click', function(e) {
     if (e.target === this) cerrarModalConfirmar();
 });
+document.getElementById('modal-cambiar-perfil').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalCambiarPerfil();
+});
 
 // Cerrar cualquier modal abierto al presionar Escape
 document.addEventListener('keydown', function(e) {
@@ -1031,6 +1122,7 @@ document.addEventListener('keydown', function(e) {
         cerrarModalEditar();
         cerrarModalImportar();
         cerrarModalConfirmar();
+        cerrarModalCambiarPerfil();
     }
 });
 
