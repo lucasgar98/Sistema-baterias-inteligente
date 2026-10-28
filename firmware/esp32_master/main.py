@@ -261,6 +261,10 @@ def on_message_mqtt(topic, msg):
                 uart_cam.write("SCAN\n")
                 uart_tft.write("SCAN_STATUS:SCANNING\n")
                 print("ORDEN DE ESCANEO ENVIADA A LA CÁMARA DESDE MQTT")
+            elif payload == "CANCEL_SCAN":  # Cancelar el escaneo del QR
+                uart_cam.write("CANCEL_SCAN\n")
+                uart_tft.write("SCAN_STATUS:CANCEL\n")
+                print("ORDEN DE CANCELACIÓN DE ESCANEO ENVIADA A LA CÁMARA DESDE MQTT")
             elif payload == "START_C":  # Iniciar carga
                 # Actualizamos el estado del sistema
                 estado_Carga = True
@@ -680,9 +684,9 @@ while True:
                                 except Exception as e:
                                     print("Error publicando QR en MQTT:", e)
 
-                    elif comando_cam == "SCAN_TIMEOUT":  # Tiempo de espera agotado sin detectar QR
-                        print("[CAM] Tiempo de escaneo agotado sin detección.")
-                        uart_tft.write("SCAN_STATUS:TIMEOUT\n")
+                    #elif comando_cam == "SCAN_TIMEOUT":  # Tiempo de espera agotado sin detectar QR
+                    #    print("[CAM] Tiempo de escaneo agotado sin detección.")
+                    #    uart_tft.write("SCAN_STATUS:TIMEOUT\n")
 
                     elif comando_cam.startswith("SCAN_STARTING"):  # Confirmación de inicio de escaneo
                         print("[CAM] Cámara iniciando escaneo.")

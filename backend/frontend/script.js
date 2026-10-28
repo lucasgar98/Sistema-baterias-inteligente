@@ -2,6 +2,7 @@ const API = window.location.origin;  // URL base de la página web
 let maxPoints = 100;  // Número máximo de puntos de los gráficos en el panel derecho
 let chartTendencia = null;  // Objeto que almacena el gráfico de tendencia de SoH
 let connOk = true;  // Bandera que indica si hay conexión con el ESP32
+
 // Mapa que contiene los umbrales de tensión para cada uno de los perfiles
 const PERFILES = new Map([
     ["LI-ION-2S", {vCorteCarga: 8.4, vCorteDescarga: 6.0}],
@@ -386,6 +387,7 @@ async function escanearConCamara() {
                 // lo actualizamos
                 const nuevoQR = d.qr_actual;
                 // Cerramos la pantalla del lector de cámara
+
                 cerrarModalCamara();
                 // Actualizamos el QR en el panel izquierdo
                 document.getElementById('input-qr').value = nuevoQR;
@@ -397,6 +399,20 @@ async function escanearConCamara() {
             console.error("Error en polling de QR:", e);
         }
     }, 800);
+}
+
+// Función que se ejecuta cuando se presiona el botón "Cancelar" de la ventana de escaneo,
+// para enviar a la ESP-CAM una orden para cancelar el escaneo de la batería
+async function cancelarEscaneo() {
+    // Disparamos la orden de cancelación de escaneo al ESP32 Master vía MQTT a través del endpoint /cancelar
+    try {
+        await fetch(`${API}/cancelar`, { method: 'POST' });
+        // Cerramos la pantalla de escaneo
+        const modal = document.getElementById('modal-camara');
+        modal.classList.remove('open');
+    } catch(e) {
+        console.error("Error al cancelar escaneo:", e);
+    }
 }
 
 // Función que se ejecuta cuando se presiona el botón "Cambiar perfil"
@@ -426,7 +442,7 @@ function cambiarPerfil() {
     }
 }
 
-// Función que cierra la pantalla secundaria del lector de la cámara. Se ejecuta al presionar cancelar o cuando se decodifica
+// Función que cierra la pantalla secundaria del lector de la cámara. Se ejecuta cuando se recibe el QR
 function cerrarModalCamara() {
     // Obtenemos el elemento correspondiente a la pantalla secundaria de la cámara
     const modal = document.getElementById('modal-camara');

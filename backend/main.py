@@ -11,7 +11,7 @@ from pydantic import BaseModel  # Validación de esquemas en peticiones FastAPI
 # y suscribirse a tópicos MQTT
 import paho.mqtt.client as mqtt
 # Importamos componentes de SQLAlchemy, la cual es un kit de herramientas SQL para interacción con base de datos
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, text, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 # Importamos el cliente de InfluxDB para escribir datos en InfluxDB
 from influxdb import InfluxDBClient
@@ -441,6 +441,12 @@ def disparar_escaneo():
     """Envía la orden de escaneo al ESP32 Master vía MQTT para activar la ESP32-CAM"""
     mqtt_client.publish("ESP32/comandos", "START_SCAN")
     return {"status": "Comando de escaneo enviado a la ESP32-CAM"}
+
+@app.post("/cancelar")
+def cancelar_escaneo():
+    """Enviamos una orden para cancelar el escaneo de la batería"""
+    mqtt_client.publish("ESP32/comandos", "CANCEL_SCAN")
+    return {"status": "Comando de cancelación de escaneo enviado a la ESP32-CAM"}
 
 @app.get("/bateria/{qr_id}")
 def detalle_bateria(qr_id: str, response: Response):

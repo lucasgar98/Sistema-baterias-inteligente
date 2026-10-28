@@ -458,15 +458,21 @@ void procesar_comando_recibido(String json_str) {
     else if (json_str.startsWith("SCAN_STATUS:")) {
       String status = json_str.substring(12);
       status.trim();
-      if (status == "TIMEOUT") {
+      /* if (status == "TIMEOUT") {
         lv_textarea_set_text(ta_main_qr, "TIMEOUT");
         lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xef4444), 0);  // Rojo si hubo timeout
         ui_set_scan_btn_state("TIME", 0xef4444);  // Indicación de timeout en el botón
         scan_btn_timer = millis() + 2000;
-      } else if (status == "SCANNING") {
+      } else */ if (status == "SCANNING") {
         lv_textarea_set_text(ta_main_qr, "Escaneando...");
         lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0x38bdf8), 0);  // Celeste durante escaneo
         ui_set_scan_btn_state("BUSC...", 0xf59e0b);
+      }
+      else if (status == "CANCEL") {
+        lv_textarea_set_text(ta_main_qr, "CANCELADO");
+        lv_obj_set_style_text_color(ta_main_qr, lv_color_hex(0xef4444), 0);
+        ui_set_scan_btn_state("STOP", 0xef4444);  // Indicación de stop en el botón
+        scan_btn_timer = millis() + 2000;
       }
     }
     // Recepción directa de nuevo código QR desde el Master

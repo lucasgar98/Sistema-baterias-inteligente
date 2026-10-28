@@ -1,32 +1,11 @@
 #include <Arduino.h>
 #include <ESP32QRCodeReader.h>
 
-// --- CONFIGURACIÓN DE MODELO DE CÁMARA (AI-THINKER ESP32-CAM) ---
-// Definimos los pines del ESP32-CAM a los cuales se conecta el sensor de cámara OV2640
-#define PWDN_GPIO_NUM     32  // Pin de alimentación (GPIO32)
-#define RESET_GPIO_NUM    -1  // Pin de reset (-1 indica reset por software)
-#define XCLK_GPIO_NUM      0  // Pin del cristal / reloj externo (GPIO0)
-// Pines de la interfaz SCCB (Serial Camera Control Bus), mapeados a un bus I2C
-#define SIOD_GPIO_NUM     26  // Pin SDA del bus SCCB (GPIO26)
-#define SIOC_GPIO_NUM     27  // Pin SCL del bus SCCB (GPIO27)
-// Pines de datos paralelos (D0 - D7)
-#define Y9_GPIO_NUM       35  // Pin D7 (GPIO35)
-#define Y8_GPIO_NUM       34  // Pin D6 (GPIO34)
-#define Y7_GPIO_NUM       39  // Pin D5 (GPIO39)
-#define Y6_GPIO_NUM       36  // Pin D4 (GPIO36)
-#define Y5_GPIO_NUM       21  // Pin D3 (GPIO21)
-#define Y4_GPIO_NUM       19  // Pin D2 (GPIO19)
-#define Y3_GPIO_NUM       18  // Pin D1 (GPIO18)
-#define Y2_GPIO_NUM        5  // Pin D0 (GPIO5)
-// Pines de sincronización
-#define VSYNC_GPIO_NUM    25  // Pin de sincronización vertical (GPIO25)
-#define HREF_GPIO_NUM     23  // Pin de sincronización horizontal (GPIO23)
-#define PCLK_GPIO_NUM     22  // Pin de reloj de pixel (GPIO22)
-
 // Pin del LED rojo de estado integrado en el ESP32-CAM (GPIO 33, lógica invertida: LOW=ON, HIGH=OFF)
 #define LED_RED_STATUS    33
 
 // Instancia del lector de códigos QR por hardware con modelo AI-THINKER
+// (Nota: CAMERA_MODEL_AI_THINKER ya mapea internamente todos los pines del sensor OV2640)
 ESP32QRCodeReader reader(CAMERA_MODEL_AI_THINKER);
 
 // Estados de la máquina de escaneo autónomo
@@ -37,7 +16,7 @@ enum ScannerState {
 
 ScannerState currentState = STATE_IDLE;
 unsigned long scanStartTime = 0;
-const unsigned long SCAN_TIMEOUT_MS = 30000; // 30 segundos de tiempo de escaneo
+//const unsigned long SCAN_TIMEOUT_MS = 30000; // 30 segundos de tiempo de escaneo
 
 void setup() {
   // Inicializamos la comunicación serie por hardware a 115200 baudios (pines TX=GPIO1, RX=GPIO3 conectados al Master)
@@ -73,7 +52,7 @@ void loop() {
       digitalWrite(LED_RED_STATUS, LOW); // Encender LED indicando escaneo activo
       Serial.println("SCAN_STARTING");
     } 
-    else if (cmd == "STOP" || cmd == "STOP_ALL") {
+    else if (cmd == "STOP" || cmd == "STOP_ALL" || cmd == "CANCEL_SCAN") {
       currentState = STATE_IDLE;
       digitalWrite(LED_RED_STATUS, HIGH); // Apagar LED
       Serial.println("SCAN_STOPPED");
@@ -83,12 +62,12 @@ void loop() {
   // 2. Procesamiento según el estado actual
   if (currentState == STATE_SCANNING) {
     // Verificamos si se excedió el tiempo máximo de búsqueda
-    if (millis() - scanStartTime > SCAN_TIMEOUT_MS) {
+    /*if (millis() - scanStartTime > SCAN_TIMEOUT_MS) {
       currentState = STATE_IDLE;
       digitalWrite(LED_RED_STATUS, HIGH);
       Serial.println("SCAN_TIMEOUT");
       return;
-    }
+    } */
 
     // Intentamos recibir un código QR decodificado desde la cola del lector de cámara
     struct QRCodeData qrCodeData;
