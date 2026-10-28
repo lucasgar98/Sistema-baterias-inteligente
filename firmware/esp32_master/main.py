@@ -684,9 +684,9 @@ while True:
                                 except Exception as e:
                                     print("Error publicando QR en MQTT:", e)
 
-                    #elif comando_cam == "SCAN_TIMEOUT":  # Tiempo de espera agotado sin detectar QR
-                    #    print("[CAM] Tiempo de escaneo agotado sin detección.")
-                    #    uart_tft.write("SCAN_STATUS:TIMEOUT\n")
+                    elif comando_cam == "SCAN_TIMEOUT":  # Tiempo de espera agotado sin detectar QR
+                        print("[CAM] Tiempo de escaneo agotado sin detección.")
+                        uart_tft.write("SCAN_STATUS:TIMEOUT\n")
 
                     elif comando_cam.startswith("SCAN_STARTING"):  # Confirmación de inicio de escaneo
                         print("[CAM] Cámara iniciando escaneo.")

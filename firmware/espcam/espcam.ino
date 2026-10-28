@@ -16,7 +16,7 @@ enum ScannerState {
 
 ScannerState currentState = STATE_IDLE;
 unsigned long scanStartTime = 0;
-//const unsigned long SCAN_TIMEOUT_MS = 30000; // 30 segundos de tiempo de escaneo
+const unsigned long SCAN_TIMEOUT_MS = 30000; // 30 segundos de tiempo de escaneo
 
 void setup() {
   // Inicializamos la comunicación serie por hardware a 115200 baudios (pines TX=GPIO1, RX=GPIO3 conectados al Master)
@@ -62,12 +62,12 @@ void loop() {
   // 2. Procesamiento según el estado actual
   if (currentState == STATE_SCANNING) {
     // Verificamos si se excedió el tiempo máximo de búsqueda
-    /*if (millis() - scanStartTime > SCAN_TIMEOUT_MS) {
+    if (millis() - scanStartTime > SCAN_TIMEOUT_MS) {
       currentState = STATE_IDLE;
       digitalWrite(LED_RED_STATUS, HIGH);
       Serial.println("SCAN_TIMEOUT");
       return;
-    } */
+    }
 
     // Intentamos recibir un código QR decodificado desde la cola del lector de cámara
     struct QRCodeData qrCodeData;
