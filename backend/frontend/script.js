@@ -363,6 +363,8 @@ async function escanearConCamara() {
     const modal = document.getElementById('modal-camara');
     // Obtenemos el valor del QR
     const qrInicial = document.getElementById('val-qr').textContent;
+    // Contador para cerrar la ventana en caso que haya pasado el timeout de 30 segundos para el escaneo
+    let contTimeout = 0;
 
     // Disparamos la orden de escaneo al ESP32 Master vía MQTT a través del endpoint /escanear
     try {
@@ -375,30 +377,35 @@ async function escanearConCamara() {
     // Agregamos una nueva clase al contenedor de la pantalla secundaria, para modificar la propiedad display en el CSS
     modal.classList.add('open');
 
-    // Polling del estado actual cada 800ms para comprobar si el QR fue recibido y decodificado por la ESP32-CAM
+    // Polling del estado actual cada 1 s para comprobar si el QR fue recibido y decodificado por la ESP32-CAM
     intervalPollQR = setInterval(async () => {
         try {
             // Hacemos una consulta GET a la ruta /estado_actual para obtener el estado actual del sistema
             const r = await fetch(`${API}/estado_actual?_=${Date.now()}`);
             // Convertimos la respuesta a formato JSON
             const d = await r.json();
+            contTimeout += 1;
             if (d.qr_actual && d.qr_actual !== 'NINGUNA' && d.qr_actual !== qrInicial) {
                 // Si qr_actual es no nulo, no vale "NINGUNA" y es distinto del QR leído inicialmente de la página,
                 // lo actualizamos
                 const nuevoQR = d.qr_actual;
                 // Cerramos la pantalla del lector de cámara
-
                 cerrarModalCamara();
-                // Actualizamos el QR en el panel izquierdo
-                document.getElementById('input-qr').value = nuevoQR;
                 // Actualizamos el QR en el campo de texto del header
+                //document.getElementById('input-qr').value = nuevoQR;
+                // Actualizamos el QR en el panel izquierdo
                 document.getElementById('val-qr').textContent = nuevoQR;
                 alert(`¡QR decodificado con éxito!: ${nuevoQR}`);
+            }
+            else if(contTimeout == 30){
+                // Cerramos la pantalla del lector de cámara
+                cerrarModalCamara();
+                alert("No se detectó ningún QR");
             }
         } catch(e) {
             console.error("Error en polling de QR:", e);
         }
-    }, 800);
+    }, 1000);
 }
 
 // Función que se ejecuta cuando se presiona el botón "Cancelar" de la ventana de escaneo,
@@ -504,7 +511,7 @@ async function actualizarEstado() {
         document.getElementById('chart-val-t').textContent = d.t_actual.toFixed(1) + ' °C';
 
         // Update QR input placeholder
-        if (d.qr_actual && d.qr_actual !== 'NINGUNA') {
+        if (d.qr_actual) {
             document.getElementById('input-qr').placeholder = d.qr_actual;
         }
 
@@ -662,10 +669,11 @@ async function cargarHistorial() {
             // Agregamos una etiqueta a la columna TIPO en función del estado
             const tipoStr = c.tipo_ciclo || '';
             let tipoLabel = '❓ Desconocido';
-            if (tipoStr.includes('CARGANDO')) {
-                tipoLabel = '⚡ Carga';
-            } else if (tipoStr.includes('DESCARGANDO')) {
+            if(tipoStr.includes('DESCARGANDO') || tipoStr.includes('DESCARGA FINAL')) {
                 tipoLabel = '🔋 Descarga';
+            }
+            else if(tipoStr.includes('CARGANDO')) {
+                tipoLabel = '⚡ Carga';
             }
             if (tipoStr.includes('Interrumpido')) {
                 tipoLabel += ' <span style="color:var(--accent-orange);font-size:10px;font-weight:600;">⚠️ Interr</span>';
